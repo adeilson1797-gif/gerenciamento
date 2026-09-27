@@ -113,3 +113,28 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Subadministrador pode consultar histórico, filtrar, exportar e corrigir lançamentos.
 - Cadastro, edição, desativação de usuários e geração de novos acessos permanecem exclusivos do administrador principal.
 - O mesmo formulário de cadastro por código de convite é usado para o segundo gestor.
+
+
+## Evolução v4.3 — Gestão de usuários e metas por item
+
+### Gestão de usuários
+- Administrador Geral pode alterar, depois do cadastro:
+  - nome;
+  - cargo/função exibido;
+  - perfil de acesso (Representante ou Subadministrador);
+  - meta mensal em R$ para representantes;
+  - status ativo/inativo.
+- Subadministrador não altera perfis de acesso nem usuários.
+
+### Metas por item
+- Administrador Geral e Subadministrador podem criar metas por produto/item.
+- Cada meta possui quantidade-alvo e período de vigência.
+- O painel gerencial mostra quantidade realizada, percentual e quantos especialistas responderam no dia.
+- Metas podem ser encerradas ou reativadas.
+
+### Obrigatoriedade no painel do especialista
+- Para cada meta por item ativa na data escolhida, o especialista é obrigado a responder:
+  - **Vendi** → informar quantidade maior que zero;
+  - **Não vendi** → quantidade registrada como zero.
+- A venda diária em R$ só é salva depois que todos os itens ativos forem respondidos.
+- As respostas podem ser corrigidas fazendo novo lançamento na mesma data.

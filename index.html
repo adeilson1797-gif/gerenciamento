@@ -114,6 +114,18 @@
         <div class="progress-foot"><span id="repDailyNeed">Média necessária: —</span><span id="repDaysLeft">Dias úteis restantes: —</span></div>
       </div>
 
+      <div id="repItemGoalsCard" class="card item-goals-card">
+        <div class="section-head">
+          <div>
+            <h2>Itens da meta do dia</h2>
+            <p class="muted">Antes de salvar a venda diária, informe obrigatoriamente se vendeu cada item da meta. Se vendeu, indique a quantidade.</p>
+          </div>
+          <span id="repItemGoalStatus" class="role-badge">Carregando…</span>
+        </div>
+        <div id="repItemGoals" class="goal-report-grid"></div>
+        <p id="repItemGoalsMsg" class="msg"></p>
+      </div>
+
       <div class="grid grid-2">
         <div class="card">
           <h2>Lançar venda diária</h2>
@@ -171,6 +183,22 @@
       </div>
       <div class="status-legend"><span><i class="dot dot-sale"></i> Com venda</span><span><i class="dot dot-zero"></i> Sem venda</span><span><i class="dot dot-pending"></i> Pendente</span></div>
 
+      <div id="userManagementCard" class="card hidden">
+        <div class="section-head">
+          <div>
+            <h2>Gestão de usuários</h2>
+            <p class="muted">Administrador Geral: altere acesso, cargo/função, meta e status dos usuários já cadastrados.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Cargo/Função</th><th>Perfil de acesso</th><th>Meta mensal</th><th>Status</th><th>Ação</th></tr></thead>
+            <tbody id="userManagementTable"></tbody>
+          </table>
+        </div>
+        <p id="userManagementMsg" class="msg"></p>
+      </div>
+
       <div class="card">
         <div class="section-head">
           <div><h2>Equipe</h2><p class="muted">Quem lançou hoje e como está o mês.</p></div>
@@ -199,6 +227,38 @@
         </div>
       </div>
 
+      <div id="itemGoalsManagerCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Metas por item</h2>
+            <p class="muted">Administrador e subadministrador podem criar metas de quantidade por produto e acompanhar o realizado.</p>
+          </div>
+        </div>
+        <div class="grid grid-2 item-goal-manager-grid">
+          <form id="itemGoalForm" class="form">
+            <label>Item / Produto</label>
+            <input id="goalItemName" required placeholder="Ex.: NEUROMAX COGNIS">
+            <label>Meta de quantidade</label>
+            <input id="goalTargetQty" type="number" min="1" step="1" required placeholder="Ex.: 50">
+            <div class="grid grid-2">
+              <div><label>Data inicial</label><input id="goalStartDate" type="date" required></div>
+              <div><label>Data final</label><input id="goalEndDate" type="date" required></div>
+            </div>
+            <button class="btn btn-primary" type="submit">Criar meta por item</button>
+            <p id="itemGoalMsg" class="msg"></p>
+          </form>
+          <div>
+            <h3>Metas ativas e acompanhamento</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Respostas hoje</th><th>Ação</th></tr></thead>
+                <tbody id="itemGoalsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="grid grid-2">
         <div class="card">
           <h2>Evolução diária da equipe</h2>
@@ -216,13 +276,20 @@
       </div>
 
       <div class="grid grid-2">
-        <div class="card">
-          <h2>Gerar convite de representante</h2>
+        <div id="adminInviteCard" class="card">
+          <h2>Gerar convite de acesso</h2>
           <form id="inviteForm">
-            <label>Nome do representante</label>
+            <label>Tipo de acesso</label>
+            <select id="inviteRole">
+              <option value="rep">Representante</option>
+              <option value="sub_admin">Subadministrador</option>
+            </select>
+            <label>Nome</label>
             <input id="inviteName" required>
-            <label>Meta mensal (R$)</label>
-            <input id="inviteTarget" type="number" min="0" step="0.01" value="0">
+            <div id="inviteTargetWrap">
+              <label>Meta mensal (R$)</label>
+              <input id="inviteTarget" type="number" min="0" step="0.01" value="0">
+            </div>
             <button class="btn btn-primary" type="submit">Gerar código</button>
           </form>
           <div id="inviteResult" class="invite-box hidden">

@@ -7,7 +7,7 @@ const localISODate=(d=new Date())=>new Date(d.getTime()-d.getTimezoneOffset()*60
 const today=()=>localISODate();
 const monthNow=()=>today().slice(0,7);
 const percent = v => `${(Number(v||0)*100).toFixed(1)}%`;
-let user=null, profile=null, adminCache={reps:[],sales:[],month:""}, dailyChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[]}, repGoalCache=[], dailyChart=null;
 
 function showOnly(id){
   ["#authView","#resetView","#repView","#adminView"].forEach(x=>{
@@ -83,10 +83,11 @@ async function boot(){
     $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
     $("#adminInviteCard")?.classList.toggle("hidden",!isMainAdmin);
     $("#subAdminInfo")?.classList.toggle("hidden",isMainAdmin);
+    $("#userManagementCard")?.classList.toggle("hidden",!isMainAdmin);
     await loadAdmin();
   } else {
     showOnly("#repView");
-    $("#repTitle").textContent=`Vendas de ${profile.name}`;
+    $("#repTitle").textContent=`${profile.job_title?profile.job_title+" — ":""}${profile.name}`;
     $("#saleDate").value=today();
     await loadRep();
   }
@@ -139,24 +140,111 @@ async function loadRep(){
   $("#repDailyNeed").textContent=target>0?`Média necessária: ${money(need)}/dia útil`:"Média necessária: —";
   $("#repDaysLeft").textContent=`Dias úteis restantes: ${days}`;
   $("#repHistory").innerHTML=rows.slice(0,12).map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note||"—"}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum lançamento no mês.</td></tr>`;
+  await loadRepItemGoals($("#saleDate").value||today());
 }
+
+async function loadRepItemGoals(dateStr){
+  if(!user || profile?.role!=="rep") return;
+  setMsg($("#repItemGoalsMsg"),"");
+  const [{data:goals,error:gErr},{data:reports,error:rErr}] = await Promise.all([
+    sb.from("item_goals").select("*").eq("active",true).lte("start_date",dateStr).gte("end_date",dateStr).order("item_name"),
+    sb.from("item_goal_reports").select("*").eq("user_id",user.id).eq("report_date",dateStr)
+  ]);
+  if(gErr||rErr){
+    setMsg($("#repItemGoalsMsg"),(gErr||rErr).message);
+    return;
+  }
+  const reportMap=Object.fromEntries((reports||[]).map(r=>[r.goal_id,r]));
+  repGoalCache=(goals||[]).map(g=>({goal:g,report:reportMap[g.id]||null}));
+  const wrap=$("#repItemGoals");
+  if(!repGoalCache.length){
+    wrap.innerHTML='<div class="muted">Nenhuma meta por item ativa para esta data.</div>';
+    $("#repItemGoalStatus").textContent="Sem itens hoje";
+    return;
+  }
+  wrap.innerHTML=repGoalCache.map(({goal,report})=>{
+    const sold=report?.sold===true, no=report?.sold===false, qty=Number(report?.quantity||0);
+    return `<div class="goal-report-item ${report?"goal-complete":""}" data-goal-id="${goal.id}">
+      <h3>${goal.item_name}</h3>
+      <div class="goal-meta">Meta do período: ${goal.target_quantity} un. • ${goal.start_date.split("-").reverse().join("/")} a ${goal.end_date.split("-").reverse().join("/")}</div>
+      <div class="goal-choice">
+        <label><input type="radio" name="goal_${goal.id}" value="yes" ${sold?"checked":""}> Vendi</label>
+        <label><input type="radio" name="goal_${goal.id}" value="no" ${no?"checked":""}> Não vendi</label>
+      </div>
+      <div class="goal-qty ${sold?"":"hidden"}">
+        <label>Quantidade vendida</label>
+        <input type="number" min="1" step="1" class="goal-qty-input" value="${sold?qty:""}" placeholder="Quantidade">
+      </div>
+    </div>`;
+  }).join("");
+  repGoalCache.forEach(({goal})=>{
+    document.querySelectorAll(`input[name="goal_${goal.id}"]`).forEach(r=>r.addEventListener("change",()=>{
+      const box=document.querySelector(`[data-goal-id="${goal.id}"]`);
+      box.querySelector(".goal-qty").classList.toggle("hidden",r.value!=="yes"||!r.checked);
+    }));
+  });
+  const done=repGoalCache.filter(x=>x.report).length;
+  $("#repItemGoalStatus").textContent=`${done}/${repGoalCache.length} informados`;
+}
+
+async function saveRequiredItemGoalReports(dateStr){
+  if(!repGoalCache.length) return {ok:true};
+  const rows=[];
+  for(const {goal} of repGoalCache){
+    const chosen=document.querySelector(`input[name="goal_${goal.id}"]:checked`);
+    if(!chosen) return {ok:false,message:`Informe se vendeu ou não o item "${goal.item_name}".`};
+    const sold=chosen.value==="yes";
+    let qty=0;
+    if(sold){
+      const input=document.querySelector(`[data-goal-id="${goal.id}"] .goal-qty-input`);
+      qty=Number(input?.value||0);
+      if(!Number.isInteger(qty)||qty<=0) return {ok:false,message:`Informe uma quantidade válida para "${goal.item_name}".`};
+    }
+    rows.push({goal_id:goal.id,user_id:user.id,report_date:dateStr,sold,quantity:qty});
+  }
+  const {error}=await sb.from("item_goal_reports").upsert(rows,{onConflict:"goal_id,user_id,report_date"});
+  if(error) return {ok:false,message:error.message};
+  return {ok:true};
+}
+
+$("#saleDate")?.addEventListener("change",()=>loadRepItemGoals($("#saleDate").value));
+
 $("#saleForm").addEventListener("submit",async e=>{
-  e.preventDefault();setMsg($("#saleMsg"),"");
-  const row={user_id:user.id,sale_date:$("#saleDate").value,amount:Number($("#saleAmount").value),note:$("#saleNote").value.trim()||null};
+  e.preventDefault();setMsg($("#saleMsg"),"");setMsg($("#repItemGoalsMsg"),"");
+  const saleDate=$("#saleDate").value;
+  const itemResult=await saveRequiredItemGoalReports(saleDate);
+  if(!itemResult.ok){
+    setMsg($("#repItemGoalsMsg"),itemResult.message);
+    return;
+  }
+  const row={user_id:user.id,sale_date:saleDate,amount:Number($("#saleAmount").value),note:$("#saleNote").value.trim()||null};
   const {error}=await sb.from("daily_sales").upsert(row,{onConflict:"user_id,sale_date"});
   if(error)return setMsg($("#saleMsg"),error.message);
-  setMsg($("#saleMsg"),"Venda salva com sucesso.","ok");$("#saleAmount").value="";$("#saleNote").value="";await loadRep();
+  setMsg($("#saleMsg"),"Venda diária e itens da meta salvos com sucesso.","ok");
+  $("#saleAmount").value="";$("#saleNote").value="";
+  await loadRep();
 });
 
 async function loadAdmin(){
   const mk=$("#adminMonth").value||monthNow(),{start,next}=monthBounds(mk);
-  const [{data:profiles,error:pErr},{data:sales,error:sErr},{data:invites,error:iErr}]=await Promise.all([
-    sb.from("profiles").select("*").eq("role","rep").order("name"),
+  if($("#goalStartDate")&&!$("#goalStartDate").value) $("#goalStartDate").value=today();
+  if($("#goalEndDate")&&!$("#goalEndDate").value) $("#goalEndDate").value=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
+  const [
+    {data:profiles,error:pErr},
+    {data:sales,error:sErr},
+    {data:invites,error:iErr},
+    {data:itemGoals,error:gErr},
+    {data:itemReports,error:grErr}
+  ]=await Promise.all([
+    sb.from("profiles").select("*").order("name"),
     sb.from("daily_sales").select("*").gte("sale_date",start).lt("sale_date",next),
-    sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(12)
+    sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
+    sb.from("item_goals").select("*").order("created_at",{ascending:false}),
+    sb.from("item_goal_reports").select("*").gte("report_date",start).lt("report_date",next)
   ]);
-  if(pErr||sErr||iErr){console.error(pErr||sErr||iErr);return;}
-  const reps=(profiles||[]).filter(r=>r.active), map={};
+  if(pErr||sErr||iErr||gErr||grErr){console.error(pErr||sErr||iErr||gErr||grErr);return;}
+  const allProfiles=profiles||[];
+  const reps=allProfiles.filter(r=>r.role==="rep"&&r.active), map={};
   (sales||[]).forEach(s=>{map[s.user_id]||={month:0,today:0,last:null,hasToday:false};map[s.user_id].month+=Number(s.amount||0);if(s.sale_date===today()){map[s.user_id].today+=Number(s.amount||0);map[s.user_id].hasToday=true;}if(!map[s.user_id].last||s.sale_date>map[s.user_id].last)map[s.user_id].last=s.sale_date;});
   const totalMonth=Object.values(map).reduce((a,b)=>a+b.month,0),totalToday=Object.values(map).reduce((a,b)=>a+b.today,0),target=reps.reduce((a,b)=>a+Number(b.monthly_target||0),0);
   const yesterday=previousDateISO();
@@ -209,10 +297,105 @@ async function loadAdmin(){
     <td>${i.code.slice(0,10)}…</td>
     <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
   </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
-  adminCache={reps,sales:sales||[],month:mk};
+  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[]};
   renderAdminSalesHistory();
+  renderUserManagement();
+  renderItemGoalsManager();
   renderDailyChart(sales||[],mk);
 }
+
+
+function roleLabel(role){
+  return role==="admin"?"Administrador Geral":role==="sub_admin"?"Subadministrador":"Representante";
+}
+
+function renderUserManagement(){
+  const card=$("#userManagementCard");
+  if(!card) return;
+  card.classList.toggle("hidden",profile?.role!=="admin");
+  if(profile?.role!=="admin") return;
+  const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id);
+  $("#userManagementTable").innerHTML=rows.map(p=>`<tr>
+    <td><input class="inline-edit user-name" data-id="${p.user_id}" value="${String(p.name||"").replaceAll('"','&quot;')}"></td>
+    <td><input class="inline-edit user-title" data-id="${p.user_id}" value="${String(p.job_title||"").replaceAll('"','&quot;')}" placeholder="Ex.: Supervisor"></td>
+    <td><select class="inline-edit role-select user-role" data-id="${p.user_id}">
+      <option value="rep" ${p.role==="rep"?"selected":""}>Representante</option>
+      <option value="sub_admin" ${p.role==="sub_admin"?"selected":""}>Subadministrador</option>
+    </select></td>
+    <td><input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}" ${p.role!=="rep"?"disabled":""}></td>
+    <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span></td>
+    <td><button class="btn btn-xs btn-primary" onclick="saveUserManagement('${p.user_id}',${p.active})">Salvar</button>
+        <button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button></td>
+  </tr>`).join("")||`<tr><td colspan="6">Nenhum outro usuário cadastrado.</td></tr>`;
+  document.querySelectorAll(".user-role").forEach(sel=>sel.addEventListener("change",()=>{
+    const id=sel.dataset.id,target=document.querySelector(`.user-target[data-id="${id}"]`);
+    if(target) target.disabled=sel.value!=="rep";
+  }));
+}
+
+window.saveUserManagement=async(userId)=>{
+  if(profile?.role!=="admin") return;
+  const name=document.querySelector(`.user-name[data-id="${userId}"]`)?.value.trim();
+  const job_title=document.querySelector(`.user-title[data-id="${userId}"]`)?.value.trim()||null;
+  const role=document.querySelector(`.user-role[data-id="${userId}"]`)?.value;
+  const targetEl=document.querySelector(`.user-target[data-id="${userId}"]`);
+  const monthly_target=role==="rep"?Number(targetEl?.value||0):0;
+  const {error}=await sb.from("profiles").update({name,job_title,role,monthly_target}).eq("user_id",userId);
+  if(error)return setMsg($("#userManagementMsg"),error.message);
+  setMsg($("#userManagementMsg"),"Usuário atualizado com sucesso.","ok");await loadAdmin();
+};
+window.toggleUserActive=async(userId,isActive)=>{
+  if(profile?.role!=="admin") return;
+  const {error}=await sb.from("profiles").update({active:!isActive}).eq("user_id",userId);
+  if(error)return setMsg($("#userManagementMsg"),error.message);
+  setMsg($("#userManagementMsg"),!isActive?"Usuário ativado.":"Usuário desativado.","ok");await loadAdmin();
+};
+
+function renderItemGoalsManager(){
+  const goals=adminCache.itemGoals||[],reports=adminCache.itemReports||[],activeReps=adminCache.reps||[];
+  const todayStr=today();
+  $("#itemGoalsTable").innerHTML=goals.map(g=>{
+    const relevant=reports.filter(r=>r.goal_id===g.id);
+    const soldQty=relevant.reduce((s,r)=>s+Number(r.quantity||0),0);
+    const pct=Number(g.target_quantity)>0?soldQty/Number(g.target_quantity):0;
+    const answeredToday=relevant.filter(r=>r.report_date===todayStr).length;
+    const inPeriod=todayStr>=g.start_date&&todayStr<=g.end_date&&g.active;
+    return `<tr>
+      <td><strong>${g.item_name}</strong><br><span class="goal-status-pill ${inPeriod?"":"closed"}">${inPeriod?"Ativa":"Fora do período"}</span></td>
+      <td>${g.start_date.split("-").reverse().join("/")}<br>${g.end_date.split("-").reverse().join("/")}</td>
+      <td>${g.target_quantity}</td><td>${soldQty}</td>
+      <td>${(pct*100).toFixed(1)}%<div class="progress-mini"><i style="width:${Math.min(pct*100,100)}%"></i></div></td>
+      <td>${answeredToday}/${activeReps.length}</td>
+      <td><button class="btn btn-xs btn-light" onclick="toggleItemGoal(${g.id},${g.active})">${g.active?"Encerrar":"Reativar"}</button></td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="7">Nenhuma meta por item criada.</td></tr>`;
+}
+
+$("#itemGoalForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();setMsg($("#itemGoalMsg"),"");
+  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  const row={
+    item_name:$("#goalItemName").value.trim(),
+    target_quantity:Number($("#goalTargetQty").value),
+    start_date:$("#goalStartDate").value,
+    end_date:$("#goalEndDate").value,
+    created_by:user.id,
+    active:true
+  };
+  if(!row.item_name||!Number.isInteger(row.target_quantity)||row.target_quantity<=0)return setMsg($("#itemGoalMsg"),"Informe item e quantidade válida.");
+  if(row.end_date<row.start_date)return setMsg($("#itemGoalMsg"),"A data final não pode ser anterior à inicial.");
+  const {error}=await sb.from("item_goals").insert(row);
+  if(error)return setMsg($("#itemGoalMsg"),error.message);
+  setMsg($("#itemGoalMsg"),"Meta por item criada com sucesso.","ok");
+  $("#goalItemName").value="";$("#goalTargetQty").value="";
+  await loadAdmin();
+});
+window.toggleItemGoal=async(id,active)=>{
+  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  const {error}=await sb.from("item_goals").update({active:!active}).eq("id",id);
+  if(error)return alert(error.message);
+  await loadAdmin();
+};
 
 function renderDailyChart(sales,mk){
   const {y,m}=monthBounds(mk), days=new Date(y,m,0).getDate(), totals=Array(days).fill(0);
