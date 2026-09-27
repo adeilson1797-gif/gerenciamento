@@ -96,3 +96,10 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Filtros por representante e período
 - Exportação Excel .xlsx
 - Relatório para impressão/PDF
+
+
+## Correção v4.1
+
+- Corrigido erro que escondia a tela de login após o deploy.
+- Adicionada a tela de recuperação de senha que estava referenciada pelo JavaScript, mas ausente no HTML.
+- `showOnly()` agora é tolerante a elementos opcionais ausentes, evitando que a interface inteira seja ocultada por erro de JavaScript.

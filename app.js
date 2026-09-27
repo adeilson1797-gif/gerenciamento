@@ -10,8 +10,12 @@ const percent = v => `${(Number(v||0)*100).toFixed(1)}%`;
 let user=null, profile=null, adminCache={reps:[],sales:[],month:""}, dailyChart=null;
 
 function showOnly(id){
-  ["#authView","#resetView","#repView","#adminView"].forEach(x=>$(x).classList.add("hidden"));
-  $(id).classList.remove("hidden");
+  ["#authView","#resetView","#repView","#adminView"].forEach(x=>{
+    const el=$(x);
+    if(el) el.classList.add("hidden");
+  });
+  const target=$(id);
+  if(target) target.classList.remove("hidden");
 }
 function setMsg(el,text,type="error"){
   el.textContent=text||""; el.className="msg "+(text?type:"");

@@ -81,6 +81,22 @@
       </div>
     </section>
 
+
+    <section id="resetView" class="auth-shell hidden">
+      <div class="card auth-card">
+        <h1>Definir nova senha</h1>
+        <p class="muted">Digite sua nova senha para concluir a recuperação de acesso.</p>
+        <form id="resetPasswordForm">
+          <label>Nova senha</label>
+          <input id="newPassword" type="password" minlength="6" required autocomplete="new-password">
+          <label>Confirmar nova senha</label>
+          <input id="confirmNewPassword" type="password" minlength="6" required autocomplete="new-password">
+          <button class="btn btn-primary" type="submit">Atualizar senha</button>
+        </form>
+        <p id="resetPasswordMsg" class="msg"></p>
+      </div>
+    </section>
+
     <section id="repView" class="hidden">
       <div class="hero">
         <div><span class="eyebrow">REPRESENTANTE</span><h1 id="repTitle">Minhas vendas</h1></div>
