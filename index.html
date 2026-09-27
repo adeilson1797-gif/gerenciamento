@@ -176,6 +176,17 @@
         <div class="kpi"><span>Falta para meta</span><strong id="admRemaining">R$ 0,00</strong></div>
         <div class="kpi"><span>Necessário/dia útil</span><strong id="admDailyNeed">R$ 0,00</strong></div>
       </div>
+      <div id="adminResetCard" class="card danger-zone hidden">
+        <div class="section-head">
+          <div>
+            <h2>Resetar painel operacional</h2>
+            <p class="muted">Exclusivo do Administrador Geral. Limpa vendas, metas por item, respostas dos itens, convites e zera as metas mensais. Os usuários, acessos e cargos permanecem cadastrados.</p>
+          </div>
+          <button id="resetPanelBtn" class="btn btn-danger" type="button">Resetar painel</button>
+        </div>
+        <p id="resetPanelMsg" class="msg"></p>
+      </div>
+
       <div class="grid grid-3 mini-grid">
         <div class="mini-kpi"><span>Representantes ativos</span><strong id="admActive">0</strong></div>
         <div class="mini-kpi"><span>Já informaram hoje</span><strong id="admReported">0</strong></div>
@@ -186,8 +197,8 @@
       <div id="userManagementCard" class="card hidden">
         <div class="section-head">
           <div>
-            <h2>Gestão de usuários</h2>
-            <p class="muted">Administrador Geral: altere acesso, cargo/função, meta e status dos usuários já cadastrados.</p>
+            <h2>Gestão de equipe</h2>
+            <p id="userManagementHint" class="muted">Gerencie funções e metas mensais da equipe.</p>
           </div>
         </div>
         <div class="table-wrap">

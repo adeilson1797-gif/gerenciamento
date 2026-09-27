@@ -83,7 +83,11 @@ async function boot(){
     $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
     $("#adminInviteCard")?.classList.toggle("hidden",!isMainAdmin);
     $("#subAdminInfo")?.classList.toggle("hidden",isMainAdmin);
-    $("#userManagementCard")?.classList.toggle("hidden",!isMainAdmin);
+    $("#userManagementCard")?.classList.remove("hidden");
+    $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
+    $("#userManagementHint").textContent=isMainAdmin
+      ?"Administrador Geral: altere acesso, cargo/função, meta, status e nome dos usuários."
+      :"Subadministrador: defina cargo/função e meta mensal dos cadastrados. Perfis de acesso e status ficam reservados ao Administrador Geral.";
     await loadAdmin();
   } else {
     showOnly("#repView");
@@ -312,43 +316,79 @@ function roleLabel(role){
 function renderUserManagement(){
   const card=$("#userManagementCard");
   if(!card) return;
-  card.classList.toggle("hidden",profile?.role!=="admin");
-  if(profile?.role!=="admin") return;
-  const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id);
+  const canManage=["admin","sub_admin"].includes(profile?.role);
+  card.classList.toggle("hidden",!canManage);
+  if(!canManage) return;
+
+  const isMainAdmin=profile.role==="admin";
+  const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id && p.role!=="admin");
+
   $("#userManagementTable").innerHTML=rows.map(p=>`<tr>
-    <td><input class="inline-edit user-name" data-id="${p.user_id}" value="${String(p.name||"").replaceAll('"','&quot;')}"></td>
-    <td><input class="inline-edit user-title" data-id="${p.user_id}" value="${String(p.job_title||"").replaceAll('"','&quot;')}" placeholder="Ex.: Supervisor"></td>
-    <td><select class="inline-edit role-select user-role" data-id="${p.user_id}">
-      <option value="rep" ${p.role==="rep"?"selected":""}>Representante</option>
-      <option value="sub_admin" ${p.role==="sub_admin"?"selected":""}>Subadministrador</option>
-    </select></td>
-    <td><input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}" ${p.role!=="rep"?"disabled":""}></td>
+    <td>
+      ${isMainAdmin
+        ? `<input class="inline-edit user-name" data-id="${p.user_id}" value="${String(p.name||"").replaceAll('"','&quot;')}">`
+        : `<strong>${p.name}</strong>`}
+    </td>
+    <td>
+      <input class="inline-edit user-title" data-id="${p.user_id}" value="${String(p.job_title||"").replaceAll('"','&quot;')}" placeholder="Ex.: Especialista, Supervisor">
+    </td>
+    <td>
+      ${isMainAdmin
+        ? `<select class="inline-edit role-select user-role" data-id="${p.user_id}">
+            <option value="rep" ${p.role==="rep"?"selected":""}>Usuário / Especialista</option>
+            <option value="sub_admin" ${p.role==="sub_admin"?"selected":""}>Subadministrador</option>
+           </select>`
+        : `<strong>${p.role==="sub_admin"?"Subadministrador":"Usuário / Especialista"}</strong><span class="restricted-note">Somente o Administrador Geral altera o perfil de acesso.</span>`}
+    </td>
+    <td>
+      <input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}">
+    </td>
     <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span></td>
-    <td><button class="btn btn-xs btn-primary" onclick="saveUserManagement('${p.user_id}',${p.active})">Salvar</button>
-        <button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button></td>
+    <td>
+      <button class="btn btn-xs btn-primary" onclick="saveUserManagement('${p.user_id}',${p.active})">Salvar</button>
+      ${isMainAdmin
+        ? `<button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button>`
+        : ""}
+    </td>
   </tr>`).join("")||`<tr><td colspan="6">Nenhum outro usuário cadastrado.</td></tr>`;
-  document.querySelectorAll(".user-role").forEach(sel=>sel.addEventListener("change",()=>{
-    const id=sel.dataset.id,target=document.querySelector(`.user-target[data-id="${id}"]`);
-    if(target) target.disabled=sel.value!=="rep";
-  }));
 }
 
 window.saveUserManagement=async(userId)=>{
-  if(profile?.role!=="admin") return;
-  const name=document.querySelector(`.user-name[data-id="${userId}"]`)?.value.trim();
+  if(!["admin","sub_admin"].includes(profile?.role)) return;
+
   const job_title=document.querySelector(`.user-title[data-id="${userId}"]`)?.value.trim()||null;
-  const role=document.querySelector(`.user-role[data-id="${userId}"]`)?.value;
-  const targetEl=document.querySelector(`.user-target[data-id="${userId}"]`);
-  const monthly_target=role==="rep"?Number(targetEl?.value||0):0;
-  const {error}=await sb.from("profiles").update({name,job_title,role,monthly_target}).eq("user_id",userId);
+  const monthly_target=Number(document.querySelector(`.user-target[data-id="${userId}"]`)?.value||0);
+
+  if(profile.role==="sub_admin"){
+    const {error}=await sb.rpc("manager_update_profile_assignment",{
+      p_user_id:userId,
+      p_job_title:job_title,
+      p_monthly_target:monthly_target
+    });
+    if(error)return setMsg($("#userManagementMsg"),error.message);
+    setMsg($("#userManagementMsg"),"Função e meta mensal atualizadas.","ok");
+    return await loadAdmin();
+  }
+
+  const name=document.querySelector(`.user-name[data-id="${userId}"]`)?.value.trim();
+  const role=document.querySelector(`.user-role[data-id="${userId}"]`)?.value||"rep";
+  const {error}=await sb.from("profiles").update({
+    name,
+    job_title,
+    role,
+    monthly_target
+  }).eq("user_id",userId);
   if(error)return setMsg($("#userManagementMsg"),error.message);
-  setMsg($("#userManagementMsg"),"Usuário atualizado com sucesso.","ok");await loadAdmin();
+  setMsg($("#userManagementMsg"),"Usuário atualizado com sucesso.","ok");
+  await loadAdmin();
 };
+
 window.toggleUserActive=async(userId,isActive)=>{
   if(profile?.role!=="admin") return;
   const {error}=await sb.from("profiles").update({active:!isActive}).eq("user_id",userId);
   if(error)return setMsg($("#userManagementMsg"),error.message);
-  setMsg($("#userManagementMsg"),!isActive?"Usuário ativado.":"Usuário desativado.","ok");await loadAdmin();
+  setMsg($("#userManagementMsg"),!isActive?"Usuário ativado.":"Usuário desativado.","ok");
+  await loadAdmin();
 };
 
 function renderItemGoalsManager(){
@@ -485,3 +525,34 @@ window.editSale=async(id,amount,note)=>{
 function filteredAdminRows(){const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));return [...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>a.sale_date.localeCompare(b.sale_date)).map(s=>({Data:s.sale_date.split("-").reverse().join("/"),Representante:reps[s.user_id]||"",Valor:Number(s.amount||0),Observacao:s.note||""}));}
 $("#exportXlsxBtn")?.addEventListener("click",()=>{const rows=filteredAdminRows(),ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:12},{wch:28},{wch:14},{wch:42}];XLSX.utils.book_append_sheet(wb,ws,"Vendas");XLSX.writeFile(wb,`acompanhamento-gerencial-${adminCache.month}.xlsx`);});
 $("#printReportBtn")?.addEventListener("click",()=>{const rows=filteredAdminRows(),total=rows.reduce((s,r)=>s+Number(r.Valor||0),0),w=window.open("","_blank");w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório</title><style>body{font-family:Arial;padding:28px}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#eef7f1}</style></head><body><h1>Acompanhamento Gerencial</h1><p>Relatório ${adminCache.month}</p><table><thead><tr><th>Data</th><th>Representante</th><th>Valor</th><th>Observação</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.Representante}</td><td>${money(r.Valor)}</td><td>${r.Observacao||"—"}</td></tr>`).join("")}</tbody></table><h3>Total: ${money(total)}</h3><p>Projeto pessoal — Especialista Escobar-PB</p><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
+
+
+$("#resetPanelBtn")?.addEventListener("click",async()=>{
+  if(profile?.role!=="admin") return;
+  const first=confirm("ATENÇÃO: isso apagará vendas, metas por item, respostas dos itens, convites e zerará metas mensais. Usuários, acessos e cargos serão preservados. Deseja continuar?");
+  if(!first) return;
+  const code=prompt('Para confirmar, digite exatamente: RESETAR');
+  if(code!=="RESETAR"){
+    return setMsg($("#resetPanelMsg"),"Reset cancelado. A confirmação não corresponde.");
+  }
+
+  setMsg($("#resetPanelMsg"),"Resetando painel...");
+  const operations=[
+    ()=>sb.from("item_goal_reports").delete().not("id","is",null),
+    ()=>sb.from("daily_sales").delete().not("id","is",null),
+    ()=>sb.from("item_goals").delete().not("id","is",null),
+    ()=>sb.from("representative_invites").delete().not("id","is",null),
+    ()=>sb.from("profiles").update({monthly_target:0}).neq("role","admin")
+  ];
+
+  for(const op of operations){
+    const {error}=await op();
+    if(error){
+      setMsg($("#resetPanelMsg"),`Erro no reset: ${error.message}`);
+      return;
+    }
+  }
+
+  setMsg($("#resetPanelMsg"),"Painel operacional resetado com sucesso. Usuários, acessos e cargos foram preservados.","ok");
+  await loadAdmin();
+});

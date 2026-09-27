@@ -72,3 +72,8 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .progress-mini{height:7px;background:#e8efe9;border-radius:999px;overflow:hidden;min-width:90px}.progress-mini > i{display:block;height:100%;background:var(--green)}
 .goal-status-pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#edf7f0;color:#146b38}
 .goal-status-pill.closed{background:#f1f2f3;color:#687078}
+
+.danger-zone{border:1px solid #efc8c8;background:#fffafa}
+.btn-danger{background:#b42318;color:white;border:none}
+.btn-danger:hover{filter:brightness(.95)}
+.restricted-note{font-size:11px;color:var(--muted);display:block;margin-top:4px}

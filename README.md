@@ -138,3 +138,36 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
   - **Não vendi** → quantidade registrada como zero.
 - A venda diária em R$ só é salva depois que todos os itens ativos forem respondidos.
 - As respostas podem ser corrigidas fazendo novo lançamento na mesma data.
+
+
+## Evolução v4.4 — Permissões e reset
+
+### Administrador Geral
+- Pode resetar o painel operacional com confirmação dupla.
+- O reset apaga:
+  - vendas diárias;
+  - metas por item;
+  - respostas das metas por item;
+  - convites;
+  - metas mensais em R$ dos usuários.
+- O reset preserva:
+  - usuários;
+  - logins;
+  - perfil de acesso;
+  - cargo/função;
+  - status do Administrador Geral.
+- Continua podendo alterar nome, cargo, perfil de acesso, meta mensal e status.
+
+### Subadministrador
+- Pode definir a **meta mensal de vendas em R$** dos cadastrados.
+- Pode definir ou alterar o **cargo/função** dos cadastrados.
+- Pode criar e acompanhar **metas por item**.
+- Não pode promover/rebaixar perfil de acesso, ativar/desativar usuários ou resetar o painel.
+
+### Demais cargos
+- Cargo/função é apenas identificação profissional.
+- Quem não é Administrador Geral ou Subadministrador permanece com perfil comum e acessa somente:
+  - suas próprias vendas;
+  - sua própria meta mensal;
+  - seus próprios itens de meta;
+  - seu próprio histórico.
