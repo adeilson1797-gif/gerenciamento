@@ -1,0 +1,98 @@
+# Acompanhamento Gerencial
+
+Projeto web para coleta online do valor total de vendas diárias de representantes comerciais.
+
+## O que já está pronto
+
+- Supabase real configurado
+- Login com e-mail e senha
+- Primeiro administrador por auto cadastro
+- Convites para representantes
+- Cada representante vê apenas os próprios dados
+- Administrador vê toda a equipe
+- Lançamento diário simples: data + valor + observação
+- Um único lançamento por representante por data
+- Correção do mesmo dia via atualização
+- Meta mensal individual
+- Indicador de quem já lançou hoje
+- Painel gerencial por mês
+- Recuperação de senha
+- Segurança RLS no banco
+
+## Banco configurado
+
+Projeto Supabase: Acompanhamento Gerencial
+Região: São Paulo
+
+O `config.js` já está apontando para o projeto criado.
+
+## Como testar localmente
+
+Sirva a pasta com qualquer servidor HTTP. Exemplo:
+
+```bash
+python -m http.server 8080
+```
+
+Depois abra:
+http://localhost:8080
+
+## Primeiro acesso
+
+1. Abra o sistema.
+2. Clique em `Primeiro acesso`.
+3. Cadastre seu nome, e-mail e senha.
+4. Se o Supabase solicitar confirmação de e-mail, confirme e faça login.
+5. O primeiro perfil válido pode se tornar administrador usando a função segura de bootstrap.
+
+## Como cadastrar representantes
+
+1. Entre como administrador.
+2. Em `Gerar convite de representante`, informe nome e meta.
+3. Copie o código.
+4. Envie o código ao representante.
+5. O representante abre a aba `Representante`, informa código, e-mail e senha.
+6. O perfil é criado automaticamente.
+
+## Publicação
+
+A pasta está pronta para publicação estática em Vercel, Netlify ou GitHub Pages.
+Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poderá ser implantado por lá.
+
+
+## Evolução gerencial v2
+
+- Ranking mensal automático
+- Evolução diária em gráfico
+- Contagem de representantes ativos, lançados e pendentes
+- Meta restante e média necessária por dia útil
+- Edição de nome/meta pelo administrador
+- Desativação de representante sem perder histórico
+- Exportação CSV do mês
+- Barra de progresso individual da meta
+
+
+## Evolução v3
+
+- Crédito na tela de login: **Projeto pessoal — Especialista Escobar-PB**
+- Crédito também no rodapé do sistema
+- Comparação de vendas de hoje x ontem
+- Projeção de fechamento do mês
+- Valor restante para a meta
+- Necessidade média por dia útil restante
+- Histórico administrativo de lançamentos
+- Correção de valor/observação pelo administrador
+- Filtro do histórico por data
+- Arquivo `vercel.json` pronto para publicação
+- `package.json` incluído para facilitar testes e deploy
+
+
+## Evolução v4
+- Status diário corrigido: R$ 0,00 conta como informado
+- Status Com venda / Sem venda / Pendente
+- Contador Já informaram hoje corrigido
+- Datas locais para evitar diferença de UTC
+- Recuperação de senha com nova senha
+- Filtros por representante e período
+- Exportação Excel .xlsx
+- Relatório para impressão/PDF

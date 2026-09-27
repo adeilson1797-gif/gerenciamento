@@ -1,0 +1,9 @@
+{
+  "name": "acompanhamento-gerencial",
+  "version": "3.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  }
+}

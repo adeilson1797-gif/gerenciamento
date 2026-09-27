@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Acompanhamento Gerencial</title>
+  <meta name="theme-color" content="#0B6B3A">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">AG</div>
+      <div><strong>Acompanhamento Gerencial</strong><small>Controle diário de vendas</small></div>
+    </div>
+    <div class="top-actions">
+      <span id="sessionName"></span>
+      <button id="logoutBtn" class="btn btn-outline hidden">Sair</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="authView" class="auth-shell">
+      <div class="card auth-card">
+        <div class="tabs">
+          <button class="tab active" data-tab="login">Entrar</button>
+          <button class="tab" data-tab="setup">Primeiro acesso</button>
+          <button class="tab" data-tab="repSignup">Representante</button>
+        </div>
+
+        <div id="loginPane" class="pane">
+          <h1>Entrar</h1>
+          <p class="muted">Use seu e-mail e senha.</p>
+          <form id="loginForm">
+            <label>E-mail</label>
+            <input id="loginEmail" type="email" required autocomplete="email">
+            <label>Senha</label>
+            <input id="loginPassword" type="password" required autocomplete="current-password">
+            <button class="btn btn-primary" type="submit">Entrar</button>
+          </form>
+          <button id="forgotBtn" class="link-btn">Esqueci minha senha</button>
+          <p id="loginMsg" class="msg"></p>
+          <div class="project-credit">
+            <span>Projeto pessoal</span>
+            <strong>Especialista Escobar-PB</strong>
+          </div>
+        </div>
+
+        <div id="setupPane" class="pane hidden">
+          <h1>Primeiro administrador</h1>
+          <p class="muted">Use esta opção apenas na primeira configuração do sistema.</p>
+          <form id="setupForm">
+            <label>Seu nome</label>
+            <input id="setupName" required>
+            <label>E-mail</label>
+            <input id="setupEmail" type="email" required>
+            <label>Senha</label>
+            <input id="setupPassword" type="password" minlength="6" required>
+            <button class="btn btn-primary" type="submit">Criar administrador</button>
+          </form>
+          <p id="setupMsg" class="msg"></p>
+        </div>
+
+        <div id="repSignupPane" class="pane hidden">
+          <h1>Cadastro de representante</h1>
+          <p class="muted">Você precisa do código de convite fornecido pelo gestor.</p>
+          <form id="repSignupForm">
+            <label>Código de convite</label>
+            <input id="inviteCode" required>
+            <label>E-mail</label>
+            <input id="repEmail" type="email" required>
+            <label>Senha</label>
+            <input id="repPassword" type="password" minlength="6" required>
+            <button class="btn btn-primary" type="submit">Criar acesso</button>
+          </form>
+          <p id="repSignupMsg" class="msg"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="repView" class="hidden">
+      <div class="hero">
+        <div><span class="eyebrow">REPRESENTANTE</span><h1 id="repTitle">Minhas vendas</h1></div>
+      </div>
+
+      <div class="grid grid-4">
+        <div class="kpi"><span>Hoje</span><strong id="repToday">R$ 0,00</strong></div>
+        <div class="kpi"><span>Acumulado do mês</span><strong id="repMonth">R$ 0,00</strong></div>
+        <div class="kpi"><span>Meta mensal</span><strong id="repTarget">R$ 0,00</strong></div>
+        <div class="kpi"><span>Atingimento</span><strong id="repPct">—</strong></div>
+      </div>
+      <div class="card progress-card">
+        <div class="progress-head"><strong>Progresso da meta</strong><span id="repRemaining">Faltam R$ 0,00</span></div>
+        <div class="progress-track"><div id="repProgress" class="progress-fill"></div></div>
+        <div class="progress-foot"><span id="repDailyNeed">Média necessária: —</span><span id="repDaysLeft">Dias úteis restantes: —</span></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Lançar venda diária</h2>
+          <p class="muted">Informe somente o valor total vendido no dia.</p>
+          <form id="saleForm">
+            <label>Data</label>
+            <input id="saleDate" type="date" required>
+            <label>Total vendido (R$)</label>
+            <input id="saleAmount" type="number" min="0" step="0.01" required placeholder="0,00">
+            <label>Observação opcional</label>
+            <textarea id="saleNote" rows="3"></textarea>
+            <button class="btn btn-primary" type="submit">Salvar venda</button>
+          </form>
+          <p id="saleMsg" class="msg"></p>
+        </div>
+
+        <div class="card">
+          <h2>Últimos lançamentos</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Valor</th><th>Observação</th></tr></thead>
+              <tbody id="repHistory"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="adminView" class="hidden">
+      <div class="hero split">
+        <div><span class="eyebrow">ADMINISTRADOR</span><h1>Painel gerencial</h1></div>
+        <div class="month-filter">
+          <label>Mês de análise</label>
+          <input id="adminMonth" type="month">
+        </div>
+      </div>
+
+      <div class="grid grid-4">
+        <div class="kpi"><span>Vendas hoje</span><strong id="admToday">R$ 0,00</strong></div>
+        <div class="kpi"><span>Vendas ontem</span><strong id="admYesterday">R$ 0,00</strong><small id="admVsYesterday">—</small></div>
+        <div class="kpi"><span>Vendas no mês</span><strong id="admMonth">R$ 0,00</strong></div>
+        <div class="kpi"><span>Projeção de fechamento</span><strong id="admProjection">R$ 0,00</strong></div>
+      </div>
+      <div class="grid grid-4">
+        <div class="kpi"><span>Meta da equipe</span><strong id="admTarget">R$ 0,00</strong></div>
+        <div class="kpi"><span>Atingimento</span><strong id="admPct">—</strong></div>
+        <div class="kpi"><span>Falta para meta</span><strong id="admRemaining">R$ 0,00</strong></div>
+        <div class="kpi"><span>Necessário/dia útil</span><strong id="admDailyNeed">R$ 0,00</strong></div>
+      </div>
+      <div class="grid grid-3 mini-grid">
+        <div class="mini-kpi"><span>Representantes ativos</span><strong id="admActive">0</strong></div>
+        <div class="mini-kpi"><span>Já informaram hoje</span><strong id="admReported">0</strong></div>
+        <div class="mini-kpi"><span>Pendentes hoje</span><strong id="admPending">0</strong></div>
+      </div>
+      <div class="status-legend"><span><i class="dot dot-sale"></i> Com venda</span><span><i class="dot dot-zero"></i> Sem venda</span><span><i class="dot dot-pending"></i> Pendente</span></div>
+
+      <div class="card">
+        <div class="section-head">
+          <div><h2>Equipe</h2><p class="muted">Quem lançou hoje e como está o mês.</p></div>
+          <div class="action-row">
+            <button id="exportBtn" class="btn btn-light">Exportar CSV</button>
+            <button id="exportXlsxBtn" class="btn btn-light">Exportar Excel</button>
+            <button id="printReportBtn" class="btn btn-light">Relatório PDF</button>
+            <button id="refreshBtn" class="btn btn-secondary">Atualizar</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Representante</th><th>Status hoje</th><th>Hoje</th><th>Mês</th><th>Meta</th><th>% Meta</th><th>Necessário/dia útil</th><th>Último lançamento</th><th>Ações</th></tr></thead>
+            <tbody id="adminTeam"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><div><h2>Histórico e correção de lançamentos</h2><p class="muted">Filtre por representante e período, corrija valores e gere relatórios.</p></div><div class="filter-row"><select id="historyRep" class="compact-input"><option value="">Todos os representantes</option></select><input id="historyStart" type="date" class="compact-input"><input id="historyEnd" type="date" class="compact-input"><button id="clearHistoryFilters" class="btn btn-light btn-xs" type="button">Limpar filtros</button></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Data</th><th>Representante</th><th>Valor</th><th>Observação</th><th>Ação</th></tr></thead>
+            <tbody id="adminSalesHistory"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Evolução diária da equipe</h2>
+          <div class="chart-box"><canvas id="dailyChart"></canvas></div>
+        </div>
+        <div class="card">
+          <h2>Ranking do mês</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Posição</th><th>Representante</th><th>Vendas</th><th>% Meta</th></tr></thead>
+              <tbody id="rankingTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Gerar convite de representante</h2>
+          <form id="inviteForm">
+            <label>Nome do representante</label>
+            <input id="inviteName" required>
+            <label>Meta mensal (R$)</label>
+            <input id="inviteTarget" type="number" min="0" step="0.01" value="0">
+            <button class="btn btn-primary" type="submit">Gerar código</button>
+          </form>
+          <div id="inviteResult" class="invite-box hidden">
+            <span>Código de convite</span>
+            <strong id="generatedCode"></strong>
+            <button id="copyCodeBtn" class="btn btn-secondary" type="button">Copiar código</button>
+          </div>
+          <p id="inviteMsg" class="msg"></p>
+        </div>
+
+        <div class="card">
+          <h2>Convites recentes</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Código</th><th>Status</th></tr></thead>
+              <tbody id="inviteList"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="app-footer">
+    <span>Acompanhamento Gerencial</span>
+    <strong>Projeto pessoal — Especialista Escobar-PB</strong>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
