@@ -103,3 +103,13 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Corrigido erro que escondia a tela de login após o deploy.
 - Adicionada a tela de recuperação de senha que estava referenciada pelo JavaScript, mas ausente no HTML.
 - `showOnly()` agora é tolerante a elementos opcionais ausentes, evitando que a interface inteira seja ocultada por erro de JavaScript.
+
+
+## Evolução v4.2 — Subadministrador
+
+- Novo perfil `sub_admin` no Supabase.
+- Administrador principal pode gerar convite para **Representante** ou **Subadministrador**.
+- Subadministrador acessa o painel gerencial completo de vendas.
+- Subadministrador pode consultar histórico, filtrar, exportar e corrigir lançamentos.
+- Cadastro, edição, desativação de usuários e geração de novos acessos permanecem exclusivos do administrador principal.
+- O mesmo formulário de cadastro por código de convite é usado para o segundo gestor.

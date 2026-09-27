@@ -75,8 +75,21 @@ async function boot(){
   user=session.user; await loadProfile(); await tryPendingInvite();
   if(!profile){showOnly("#authView");$("#sessionName").textContent=user.email||"";$("#logoutBtn").classList.remove("hidden");return;}
   $("#sessionName").textContent=profile.name;$("#logoutBtn").classList.remove("hidden");
-  if(profile.role==="admin"){showOnly("#adminView");$("#adminMonth").value=$("#adminMonth").value||monthNow();await loadAdmin();}
-  else{showOnly("#repView");$("#repTitle").textContent=`Vendas de ${profile.name}`;$("#saleDate").value=today();await loadRep();}
+  if(["admin","sub_admin"].includes(profile.role)){
+    showOnly("#adminView");
+    $("#adminMonth").value=$("#adminMonth").value||monthNow();
+    const isMainAdmin=profile.role==="admin";
+    $("#managerRoleBadge").textContent=isMainAdmin?"Administrador principal":"Subadministrador";
+    $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
+    $("#adminInviteCard")?.classList.toggle("hidden",!isMainAdmin);
+    $("#subAdminInfo")?.classList.toggle("hidden",isMainAdmin);
+    await loadAdmin();
+  } else {
+    showOnly("#repView");
+    $("#repTitle").textContent=`Vendas de ${profile.name}`;
+    $("#saleDate").value=today();
+    await loadRep();
+  }
 }
 
 $("#loginForm").addEventListener("submit",async e=>{
@@ -177,8 +190,10 @@ async function loadAdmin(){
       <td>${money(s.today)}</td><td>${money(s.month)}</td><td>${money(r.monthly_target)}</td>
       <td>${Number(r.monthly_target)>0?percent(s.month/Number(r.monthly_target)):"—"}</td><td>${Number(r.monthly_target)>0?money(need):"—"}</td>
       <td>${s.last?s.last.split("-").reverse().join("/"):"—"}</td>
-      <td><button class="btn btn-xs btn-light" onclick="editRep('${r.user_id}','${String(r.name).replaceAll("'","&#39;")}',${Number(r.monthly_target||0)})">Editar</button>
-      <button class="btn btn-xs btn-light danger" onclick="deactivateRep('${r.user_id}','${String(r.name).replaceAll("'","&#39;")}')">Desativar</button></td>
+      <td>${profile.role==="admin"
+        ? `<button class="btn btn-xs btn-light" onclick="editRep('${r.user_id}','${String(r.name).replaceAll("'","&#39;")}',${Number(r.monthly_target||0)})">Editar</button>
+           <button class="btn btn-xs btn-light danger" onclick="deactivateRep('${r.user_id}','${String(r.name).replaceAll("'","&#39;")}')">Desativar</button>`
+        : `<span class="muted">Somente consulta</span>`}</td>
     </tr>`;
   }).join("")||`<tr><td colspan="10">Nenhum representante cadastrado.</td></tr>`;
 
@@ -188,7 +203,12 @@ async function loadAdmin(){
     return `<tr><td>${idx+1}º</td><td>${r.name}</td><td>${money(sold)}</td><td>${target>0?percent(sold/target):"—"}</td></tr>`;
   }).join("")||`<tr><td colspan="4">Sem dados.</td></tr>`;
 
-  $("#inviteList").innerHTML=(invites||[]).map(i=>`<tr><td>${i.representative_name}</td><td>${i.code.slice(0,10)}…</td><td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum convite criado.</td></tr>`;
+  $("#inviteList").innerHTML=(invites||[]).map(i=>`<tr>
+    <td>${i.representative_name}</td>
+    <td>${i.invite_role==="sub_admin"?"Subadministrador":"Representante"}</td>
+    <td>${i.code.slice(0,10)}…</td>
+    <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
+  </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
   adminCache={reps,sales:sales||[],month:mk};
   renderAdminSalesHistory();
   renderDailyChart(sales||[],mk);
@@ -226,12 +246,29 @@ $("#exportBtn").addEventListener("click",()=>{
   a.href=url;a.download=`vendas-${adminCache.month}.csv`;a.click();URL.revokeObjectURL(url);
 });
 
+$("#inviteRole")?.addEventListener("change",()=>{
+  const isRep=$("#inviteRole").value==="rep";
+  $("#inviteTargetWrap")?.classList.toggle("hidden",!isRep);
+  if(!isRep) $("#inviteTarget").value="0";
+});
+
 $("#inviteForm").addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#inviteMsg"),"");
-  const row={representative_name:$("#inviteName").value.trim(),monthly_target:Number($("#inviteTarget").value||0)};
+  if(profile?.role!=="admin") return setMsg($("#inviteMsg"),"Apenas o administrador principal pode gerar acessos.");
+  const role=$("#inviteRole")?.value||"rep";
+  const row={
+    representative_name:$("#inviteName").value.trim(),
+    monthly_target:role==="rep"?Number($("#inviteTarget").value||0):0,
+    invite_role:role
+  };
   const {data,error}=await sb.from("representative_invites").insert(row).select().single();
   if(error)return setMsg($("#inviteMsg"),error.message);
-  $("#generatedCode").textContent=data.code;$("#inviteResult").classList.remove("hidden");setMsg($("#inviteMsg"),"Convite criado. Envie o código ao representante.","ok");await loadAdmin();
+  $("#generatedCode").textContent=data.code;
+  $("#inviteResult").classList.remove("hidden");
+  setMsg($("#inviteMsg"),role==="sub_admin"
+    ?"Convite de subadministrador criado. Envie o código para o segundo gestor."
+    :"Convite de representante criado. Envie o código ao representante.","ok");
+  await loadAdmin();
 });
 $("#copyCodeBtn").addEventListener("click",async()=>{await navigator.clipboard.writeText($("#generatedCode").textContent);$("#copyCodeBtn").textContent="Copiado!";setTimeout(()=>$("#copyCodeBtn").textContent="Copiar código",1300);});
 

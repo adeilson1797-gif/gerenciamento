@@ -54,3 +54,7 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 @media(max-width:600px){.app-footer{flex-direction:column;text-align:center}.compact-input{width:100%}}
 
 .filter-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.status-legend{display:flex;gap:18px;flex-wrap:wrap;margin:-6px 0 18px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:12px;font-size:12px;color:var(--muted)}.status-legend span{display:flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}.dot-sale{background:#16803b}.dot-zero{background:#c58a00}.dot-pending{background:#c13c3c}.status.sale{background:#e8f7ed;color:#147238}.status.zero{background:#fff4d9;color:#8b6200}.status.pending{background:#fdeaea;color:#a02d2d}@media(max-width:900px){.filter-row{width:100%}.filter-row .compact-input{min-width:150px;flex:1}}
+
+.manager-access-line{display:flex;justify-content:flex-end;margin-bottom:8px}
+.role-badge{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:#edf7f0;color:#146b38;font-weight:800;font-size:12px;border:1px solid #d7eadc}
+.role-badge.sub{background:#eef3ff;color:#3158a6;border-color:#dce5ff}
