@@ -77,3 +77,9 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .btn-danger{background:#b42318;color:white;border:none}
 .btn-danger:hover{filter:brightness(.95)}
 .restricted-note{font-size:11px;color:var(--muted);display:block;margin-top:4px}
+
+.compact-head{margin:8px 0 10px}.compact-head h3{margin:0}
+.distributor-entry-list{display:flex;flex-direction:column;gap:9px;margin-bottom:8px}
+.distributor-entry-row{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(120px,.8fr) auto;gap:8px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fbfdfb}
+.distributor-entry-row label{margin:0 0 4px}.distributor-entry-row .remove-row{align-self:end}
+@media(max-width:700px){.distributor-entry-row{grid-template-columns:1fr}.distributor-entry-row .remove-row{width:100%}}

@@ -171,3 +171,28 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
   - sua própria meta mensal;
   - seus próprios itens de meta;
   - seu próprio histórico.
+
+
+## Evolução v4.5 — Vendas por distribuidora
+
+### Especialista
+- O lançamento diário agora é detalhado por distribuidora.
+- Pode adicionar uma ou várias distribuidoras no mesmo dia.
+- Informa o valor vendido em cada distribuidora.
+- O **total vendido do dia é calculado automaticamente** pela soma das distribuidoras.
+- Não é permitido repetir a mesma distribuidora no mesmo lançamento.
+- Um dia sem vendas continua podendo ser informado com total R$ 0,00.
+
+### Administrador Geral e Subadministrador
+- Podem cadastrar e ativar/desativar distribuidoras.
+- Novo painel **Vendas por distribuidora** com:
+  - total de hoje;
+  - total do mês;
+  - participação percentual no total do mês.
+- O histórico gerencial passa a mostrar a divisão da venda entre as distribuidoras.
+
+### Dados
+- Criadas as tabelas `distributors` e `daily_sales_distributors`.
+- O total diário continua gravado em `daily_sales` para preservar os dashboards existentes.
+- O salvamento da venda e da divisão por distribuidora é feito por RPC transacional no Supabase.
+- O reset do painel limpa também os lançamentos por distribuidora, preservando o cadastro das distribuidoras.

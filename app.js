@@ -7,7 +7,7 @@ const localISODate=(d=new Date())=>new Date(d.getTime()-d.getTimezoneOffset()*60
 const today=()=>localISODate();
 const monthNow=()=>today().slice(0,7);
 const percent = v => `${(Number(v||0)*100).toFixed(1)}%`;
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[]}, repGoalCache=[], dailyChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], dailyChart=null;
 
 function showOnly(id){
   ["#authView","#resetView","#repView","#adminView"].forEach(x=>{
@@ -145,7 +145,76 @@ async function loadRep(){
   $("#repDaysLeft").textContent=`Dias úteis restantes: ${days}`;
   $("#repHistory").innerHTML=rows.slice(0,12).map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note||"—"}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum lançamento no mês.</td></tr>`;
   await loadRepItemGoals($("#saleDate").value||today());
+  await loadRepDistributors($("#saleDate").value||today());
 }
+
+
+async function loadRepDistributors(dateStr){
+  if(!user || profile?.role!=="rep") return;
+  setMsg($("#repDistributorMsg"),"");
+  const [{data:distributors,error:dErr},{data:rows,error:rErr}] = await Promise.all([
+    sb.from("distributors").select("*").eq("active",true).order("name"),
+    sb.from("daily_sales_distributors").select("*").eq("user_id",user.id).eq("sale_date",dateStr)
+  ]);
+  if(dErr||rErr){
+    setMsg($("#repDistributorMsg"),(dErr||rErr).message);
+    return;
+  }
+  repDistributorCache=distributors||[];
+  const wrap=$("#repDistributorRows");
+  wrap.innerHTML="";
+  if((rows||[]).length){
+    (rows||[]).forEach(r=>addDistributorEntryRow(r.distributor_id,Number(r.amount||0)));
+  } else if(repDistributorCache.length){
+    addDistributorEntryRow("", "");
+  } else {
+    wrap.innerHTML='<div class="muted">Nenhuma distribuidora ativa cadastrada. Solicite ao gestor.</div>';
+  }
+  updateDistributorTotal();
+}
+
+function distributorOptions(selected=""){
+  return '<option value="">Selecione...</option>'+repDistributorCache.map(d=>`<option value="${d.id}" ${String(d.id)===String(selected)?"selected":""}>${d.name}</option>`).join("");
+}
+
+function addDistributorEntryRow(distributorId="",amount=""){
+  if(!repDistributorCache.length) return;
+  const row=document.createElement("div");
+  row.className="distributor-entry-row";
+  row.innerHTML=`
+    <div><label>Distribuidora</label><select class="dist-select">${distributorOptions(distributorId)}</select></div>
+    <div><label>Valor vendido (R$)</label><input class="dist-amount" type="number" min="0.01" step="0.01" value="${amount!==""?Number(amount).toFixed(2):""}" placeholder="0,00"></div>
+    <button class="btn btn-light btn-xs remove-row" type="button">Remover</button>`;
+  row.querySelector(".dist-amount").addEventListener("input",updateDistributorTotal);
+  row.querySelector(".dist-select").addEventListener("change",updateDistributorTotal);
+  row.querySelector(".remove-row").addEventListener("click",()=>{row.remove();updateDistributorTotal();});
+  $("#repDistributorRows").appendChild(row);
+}
+
+function updateDistributorTotal(){
+  const total=[...document.querySelectorAll("#repDistributorRows .dist-amount")]
+    .reduce((s,i)=>s+Number(i.value||0),0);
+  $("#saleAmount").value=total.toFixed(2);
+}
+
+function collectDistributorBreakdown(){
+  const rows=[...document.querySelectorAll("#repDistributorRows .distributor-entry-row")];
+  const data=[];
+  const used=new Set();
+  for(const row of rows){
+    const distributor_id=Number(row.querySelector(".dist-select")?.value||0);
+    const amount=Number(row.querySelector(".dist-amount")?.value||0);
+    if(!distributor_id && !amount) continue;
+    if(!distributor_id) return {ok:false,message:"Selecione a distribuidora em todas as linhas preenchidas."};
+    if(amount<=0) return {ok:false,message:"Informe um valor maior que zero para cada distribuidora selecionada."};
+    if(used.has(distributor_id)) return {ok:false,message:"A mesma distribuidora foi selecionada mais de uma vez. Use apenas uma linha por distribuidora."};
+    used.add(distributor_id);
+    data.push({distributor_id,amount:Number(amount.toFixed(2))});
+  }
+  return {ok:true,data};
+}
+
+$("#addDistributorRowBtn")?.addEventListener("click",()=>addDistributorEntryRow());
 
 async function loadRepItemGoals(dateStr){
   if(!user || profile?.role!=="rep") return;
@@ -211,21 +280,34 @@ async function saveRequiredItemGoalReports(dateStr){
   return {ok:true};
 }
 
-$("#saleDate")?.addEventListener("change",()=>loadRepItemGoals($("#saleDate").value));
+$("#saleDate")?.addEventListener("change",()=>{loadRepItemGoals($("#saleDate").value);loadRepDistributors($("#saleDate").value);});
 
 $("#saleForm").addEventListener("submit",async e=>{
-  e.preventDefault();setMsg($("#saleMsg"),"");setMsg($("#repItemGoalsMsg"),"");
+  e.preventDefault();
+  setMsg($("#saleMsg"),"");setMsg($("#repItemGoalsMsg"),"");setMsg($("#repDistributorMsg"),"");
   const saleDate=$("#saleDate").value;
+
   const itemResult=await saveRequiredItemGoalReports(saleDate);
   if(!itemResult.ok){
     setMsg($("#repItemGoalsMsg"),itemResult.message);
     return;
   }
-  const row={user_id:user.id,sale_date:saleDate,amount:Number($("#saleAmount").value),note:$("#saleNote").value.trim()||null};
-  const {error}=await sb.from("daily_sales").upsert(row,{onConflict:"user_id,sale_date"});
+
+  const breakdown=collectDistributorBreakdown();
+  if(!breakdown.ok){
+    setMsg($("#repDistributorMsg"),breakdown.message);
+    return;
+  }
+
+  const {data:total,error}=await sb.rpc("save_daily_sale_with_distributors",{
+    p_sale_date:saleDate,
+    p_note:$("#saleNote").value.trim()||null,
+    p_breakdown:breakdown.data
+  });
   if(error)return setMsg($("#saleMsg"),error.message);
-  setMsg($("#saleMsg"),"Venda diária e itens da meta salvos com sucesso.","ok");
-  $("#saleAmount").value="";$("#saleNote").value="";
+
+  setMsg($("#saleMsg"),`Venda salva com sucesso. Total do dia: ${money(total)}.`,"ok");
+  $("#saleNote").value="";
   await loadRep();
 });
 
@@ -238,15 +320,19 @@ async function loadAdmin(){
     {data:sales,error:sErr},
     {data:invites,error:iErr},
     {data:itemGoals,error:gErr},
-    {data:itemReports,error:grErr}
+    {data:itemReports,error:grErr},
+    {data:distributors,error:dErr},
+    {data:salesDistributors,error:sdErr}
   ]=await Promise.all([
     sb.from("profiles").select("*").order("name"),
     sb.from("daily_sales").select("*").gte("sale_date",start).lt("sale_date",next),
     sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
     sb.from("item_goals").select("*").order("created_at",{ascending:false}),
-    sb.from("item_goal_reports").select("*").gte("report_date",start).lt("report_date",next)
+    sb.from("item_goal_reports").select("*").gte("report_date",start).lt("report_date",next),
+    sb.from("distributors").select("*").order("name"),
+    sb.from("daily_sales_distributors").select("*").gte("sale_date",start).lt("sale_date",next)
   ]);
-  if(pErr||sErr||iErr||gErr||grErr){console.error(pErr||sErr||iErr||gErr||grErr);return;}
+  if(pErr||sErr||iErr||gErr||grErr||dErr||sdErr){console.error(pErr||sErr||iErr||gErr||grErr||dErr||sdErr);return;}
   const allProfiles=profiles||[];
   const reps=allProfiles.filter(r=>r.role==="rep"&&r.active), map={};
   (sales||[]).forEach(s=>{map[s.user_id]||={month:0,today:0,last:null,hasToday:false};map[s.user_id].month+=Number(s.amount||0);if(s.sale_date===today()){map[s.user_id].today+=Number(s.amount||0);map[s.user_id].hasToday=true;}if(!map[s.user_id].last||s.sale_date>map[s.user_id].last)map[s.user_id].last=s.sale_date;});
@@ -301,10 +387,12 @@ async function loadAdmin(){
     <td>${i.code.slice(0,10)}…</td>
     <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
   </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
-  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[]};
+  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[]};
   renderAdminSalesHistory();
   renderUserManagement();
   renderItemGoalsManager();
+  renderDistributorManager();
+  renderDistributorSales();
   renderDailyChart(sales||[],mk);
 }
 
@@ -388,6 +476,53 @@ window.toggleUserActive=async(userId,isActive)=>{
   const {error}=await sb.from("profiles").update({active:!isActive}).eq("user_id",userId);
   if(error)return setMsg($("#userManagementMsg"),error.message);
   setMsg($("#userManagementMsg"),!isActive?"Usuário ativado.":"Usuário desativado.","ok");
+  await loadAdmin();
+};
+
+
+function renderDistributorManager(){
+  const rows=adminCache.distributors||[];
+  $("#distributorsTable").innerHTML=rows.map(d=>`<tr>
+    <td><strong>${d.name}</strong></td>
+    <td><span class="${d.active?"user-status-active":"user-status-inactive"}">${d.active?"Ativa":"Inativa"}</span></td>
+    <td><button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button></td>
+  </tr>`).join("")||`<tr><td colspan="3">Nenhuma distribuidora cadastrada.</td></tr>`;
+}
+
+function renderDistributorSales(){
+  const distributors=adminCache.distributors||[];
+  const rows=adminCache.salesDistributors||[];
+  const monthTotal=rows.reduce((s,r)=>s+Number(r.amount||0),0);
+  $("#distributorSalesTable").innerHTML=distributors.map(d=>{
+    const distRows=rows.filter(r=>r.distributor_id===d.id);
+    const todayTotal=distRows.filter(r=>r.sale_date===today()).reduce((s,r)=>s+Number(r.amount||0),0);
+    const total=distRows.reduce((s,r)=>s+Number(r.amount||0),0);
+    const pct=monthTotal>0?total/monthTotal:0;
+    return `<tr>
+      <td><strong>${d.name}</strong></td>
+      <td>${money(todayTotal)}</td>
+      <td>${money(total)}</td>
+      <td>${monthTotal>0?percent(pct):"—"}</td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="4">Nenhuma distribuidora cadastrada.</td></tr>`;
+}
+
+$("#distributorForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();setMsg($("#distributorMsg"),"");
+  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  const name=$("#distributorName").value.trim();
+  if(!name)return setMsg($("#distributorMsg"),"Informe o nome da distribuidora.");
+  const {error}=await sb.from("distributors").insert({name,created_by:user.id,active:true});
+  if(error)return setMsg($("#distributorMsg"),error.message);
+  $("#distributorName").value="";
+  setMsg($("#distributorMsg"),"Distribuidora adicionada.","ok");
+  await loadAdmin();
+});
+
+window.toggleDistributor=async(id,active)=>{
+  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  const {error}=await sb.from("distributors").update({active:!active}).eq("id",id);
+  if(error)return alert(error.message);
   await loadAdmin();
 };
 
@@ -539,6 +674,7 @@ $("#resetPanelBtn")?.addEventListener("click",async()=>{
   setMsg($("#resetPanelMsg"),"Resetando painel...");
   const operations=[
     ()=>sb.from("item_goal_reports").delete().not("id","is",null),
+    ()=>sb.from("daily_sales_distributors").delete().not("id","is",null),
     ()=>sb.from("daily_sales").delete().not("id","is",null),
     ()=>sb.from("item_goals").delete().not("id","is",null),
     ()=>sb.from("representative_invites").delete().not("id","is",null),

@@ -133,8 +133,17 @@
           <form id="saleForm">
             <label>Data</label>
             <input id="saleDate" type="date" required>
-            <label>Total vendido (R$)</label>
-            <input id="saleAmount" type="number" min="0" step="0.01" required placeholder="0,00">
+            <div class="section-head compact-head">
+              <div>
+                <h3>Vendas por distribuidora</h3>
+                <p class="muted">Informe em qual distribuidora vendeu e o total vendido em cada uma.</p>
+              </div>
+              <button id="addDistributorRowBtn" class="btn btn-light btn-xs" type="button">+ Distribuidora</button>
+            </div>
+            <div id="repDistributorRows" class="distributor-entry-list"></div>
+            <p id="repDistributorMsg" class="msg"></p>
+            <label>Total vendido no dia (R$)</label>
+            <input id="saleAmount" type="number" min="0" step="0.01" readonly value="0.00">
             <label>Observação opcional</label>
             <textarea id="saleNote" rows="3"></textarea>
             <button class="btn btn-primary" type="submit">Salvar venda</button>
@@ -232,8 +241,49 @@
         <div class="section-head"><div><h2>Histórico e correção de lançamentos</h2><p class="muted">Filtre por representante e período, corrija valores e gere relatórios.</p></div><div class="filter-row"><select id="historyRep" class="compact-input"><option value="">Todos os representantes</option></select><input id="historyStart" type="date" class="compact-input"><input id="historyEnd" type="date" class="compact-input"><button id="clearHistoryFilters" class="btn btn-light btn-xs" type="button">Limpar filtros</button></div></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Data</th><th>Representante</th><th>Valor</th><th>Observação</th><th>Ação</th></tr></thead>
+            <thead><tr><th>Data</th><th>Representante</th><th>Distribuidoras</th><th>Valor</th><th>Observação</th><th>Ação</th></tr></thead>
             <tbody id="adminSalesHistory"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="distributorManagerCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Distribuidoras</h2>
+            <p class="muted">Administrador Geral e Subadministrador podem cadastrar distribuidoras e acompanhar os valores separados.</p>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <form id="distributorForm" class="form">
+            <label>Nome da distribuidora</label>
+            <input id="distributorName" required placeholder="Ex.: Distribuidora A">
+            <button class="btn btn-primary" type="submit">Adicionar distribuidora</button>
+            <p id="distributorMsg" class="msg"></p>
+          </form>
+          <div>
+            <h3>Cadastradas</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Distribuidora</th><th>Status</th><th>Ação</th></tr></thead>
+                <tbody id="distributorsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="distributorSalesCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Vendas por distribuidora</h2>
+            <p class="muted">Valores separados por distribuidora no mês selecionado.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Distribuidora</th><th>Hoje</th><th>Mês</th><th>% do total do mês</th></tr></thead>
+            <tbody id="distributorSalesTable"></tbody>
           </table>
         </div>
       </div>
