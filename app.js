@@ -365,7 +365,10 @@ async function loadAdmin(){
     return `<tr>
       <td><span class="rank-badge">${idx+1}</span></td><td>${r.name}</td>
       <td><span class="status ${statusClass}">${statusText}</span></td>
-      <td>${money(s.today)}</td><td>${money(s.month)}</td><td>${money(r.monthly_target)}</td>
+      <td>${money(s.today)}</td>
+      <td>${money(s.month)}</td>
+      <td><div class="dist-summary">${distributorSummaryForRep(r.user_id)}</div></td>
+      <td>${money(r.monthly_target)}</td>
       <td>${Number(r.monthly_target)>0?percent(s.month/Number(r.monthly_target)):"—"}</td><td>${Number(r.monthly_target)>0?money(need):"—"}</td>
       <td>${s.last?s.last.split("-").reverse().join("/"):"—"}</td>
       <td>${profile.role==="admin"
@@ -373,7 +376,7 @@ async function loadAdmin(){
            <button class="btn btn-xs btn-light danger" onclick="deactivateRep('${r.user_id}','${String(r.name).replaceAll("'","&#39;")}')">Desativar</button>`
         : `<span class="muted">Somente consulta</span>`}</td>
     </tr>`;
-  }).join("")||`<tr><td colspan="10">Nenhum representante cadastrado.</td></tr>`;
+  }).join("")||`<tr><td colspan="11">Nenhum representante cadastrado.</td></tr>`;
 
   const historyRep=$("#historyRep"); if(historyRep){const keep=historyRep.value;historyRep.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");historyRep.value=keep;}
   $("#rankingTable").innerHTML=ranked.slice(0,10).map((r,idx)=>{
@@ -393,6 +396,7 @@ async function loadAdmin(){
   renderItemGoalsManager();
   renderDistributorManager();
   renderDistributorSales();
+  renderRepDistributorBreakdown();
   renderDailyChart(sales||[],mk);
 }
 
@@ -487,6 +491,58 @@ function renderDistributorManager(){
     <td><span class="${d.active?"user-status-active":"user-status-inactive"}">${d.active?"Ativa":"Inativa"}</span></td>
     <td><button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button></td>
   </tr>`).join("")||`<tr><td colspan="3">Nenhuma distribuidora cadastrada.</td></tr>`;
+}
+
+
+function distributorSummaryForRep(userId){
+  const rows=(adminCache.salesDistributors||[]).filter(r=>r.user_id===userId);
+  const distNames=Object.fromEntries((adminCache.distributors||[]).map(d=>[String(d.id),d.name]));
+  const grouped={};
+  rows.forEach(r=>{
+    const key=String(r.distributor_id);
+    grouped[key]=(grouped[key]||0)+Number(r.amount||0);
+  });
+  const parts=Object.entries(grouped)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([id,total])=>`<div><strong>${distNames[id]||"Distribuidora"}:</strong> ${money(total)}</div>`);
+  return parts.join("")||'<span class="muted-line">Sem divisão informada</span>';
+}
+
+function renderRepDistributorBreakdown(){
+  const reps=adminCache.reps||[];
+  const distributors=adminCache.distributors||[];
+  const rows=adminCache.salesDistributors||[];
+  const table=[];
+
+  reps.forEach(rep=>{
+    const repRows=rows.filter(r=>r.user_id===rep.user_id);
+    const repTotal=repRows.reduce((s,r)=>s+Number(r.amount||0),0);
+
+    distributors.forEach(d=>{
+      const dRows=repRows.filter(r=>String(r.distributor_id)===String(d.id));
+      const month=dRows.reduce((s,r)=>s+Number(r.amount||0),0);
+      const todayTotal=dRows.filter(r=>r.sale_date===today()).reduce((s,r)=>s+Number(r.amount||0),0);
+      if(month>0 || todayTotal>0){
+        table.push({
+          rep:rep.name,
+          distributor:d.name,
+          today:todayTotal,
+          month,
+          pct:repTotal>0?month/repTotal:0
+        });
+      }
+    });
+  });
+
+  table.sort((a,b)=>a.rep.localeCompare(b.rep)||b.month-a.month);
+
+  $("#repDistributorBreakdownTable").innerHTML=table.map(r=>`<tr>
+    <td><strong>${r.rep}</strong></td>
+    <td>${r.distributor}</td>
+    <td>${money(r.today)}</td>
+    <td>${money(r.month)}</td>
+    <td>${percent(r.pct)}</td>
+  </tr>`).join("")||`<tr><td colspan="5">Ainda não há vendas por distribuidora no período.</td></tr>`;
 }
 
 function renderDistributorSales(){
@@ -657,9 +713,33 @@ window.editSale=async(id,amount,note)=>{
   await loadAdmin();
 };
 
-function filteredAdminRows(){const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));return [...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>a.sale_date.localeCompare(b.sale_date)).map(s=>({Data:s.sale_date.split("-").reverse().join("/"),Representante:reps[s.user_id]||"",Valor:Number(s.amount||0),Observacao:s.note||""}));}
-$("#exportXlsxBtn")?.addEventListener("click",()=>{const rows=filteredAdminRows(),ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:12},{wch:28},{wch:14},{wch:42}];XLSX.utils.book_append_sheet(wb,ws,"Vendas");XLSX.writeFile(wb,`acompanhamento-gerencial-${adminCache.month}.xlsx`);});
-$("#printReportBtn")?.addEventListener("click",()=>{const rows=filteredAdminRows(),total=rows.reduce((s,r)=>s+Number(r.Valor||0),0),w=window.open("","_blank");w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório</title><style>body{font-family:Arial;padding:28px}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#eef7f1}</style></head><body><h1>Acompanhamento Gerencial</h1><p>Relatório ${adminCache.month}</p><table><thead><tr><th>Data</th><th>Representante</th><th>Valor</th><th>Observação</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.Representante}</td><td>${money(r.Valor)}</td><td>${r.Observacao||"—"}</td></tr>`).join("")}</tbody></table><h3>Total: ${money(total)}</h3><p>Projeto pessoal — Especialista Escobar-PB</p><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
+function filteredAdminRows(){
+  const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
+  const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
+  const distNames=Object.fromEntries((adminCache.distributors||[]).map(d=>[String(d.id),d.name]));
+  return [...(adminCache.sales||[])]
+    .filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end))
+    .sort((a,b)=>a.sale_date.localeCompare(b.sale_date))
+    .map(s=>{
+      const distText=(adminCache.salesDistributors||[])
+        .filter(x=>x.user_id===s.user_id&&x.sale_date===s.sale_date)
+        .map(x=>`${distNames[String(x.distributor_id)]||"Distribuidora"}: ${money(x.amount)}`)
+        .join(" | ");
+      return {
+        Data:s.sale_date.split("-").reverse().join("/"),
+        Representante:reps[s.user_id]||"",
+        Distribuidoras:distText||"—",
+        Valor:Number(s.amount||0),
+        Observacao:s.note||""
+      };
+    });
+}
+$("#exportXlsxBtn")?.addEventListener("click",()=>{const rows=filteredAdminRows(),ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:12},{wch:28},{wch:48},{wch:14},{wch:42}];XLSX.utils.book_append_sheet(wb,ws,"Vendas");XLSX.writeFile(wb,`acompanhamento-gerencial-${adminCache.month}.xlsx`);});
+$("#printReportBtn")?.addEventListener("click",()=>{
+  const rows=filteredAdminRows(),total=rows.reduce((s,r)=>s+Number(r.Valor||0),0),w=window.open("","_blank");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório</title><style>body{font-family:Arial;padding:28px}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#eef7f1}</style></head><body><h1>Acompanhamento Gerencial</h1><p>Relatório ${adminCache.month}</p><table><thead><tr><th>Data</th><th>Representante</th><th>Distribuidoras</th><th>Valor</th><th>Observação</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.Representante}</td><td>${r.Distribuidoras||"—"}</td><td>${money(r.Valor)}</td><td>${r.Observacao||"—"}</td></tr>`).join("")}</tbody></table><h3>Total: ${money(total)}</h3><p>Projeto pessoal — Especialista Escobar-PB</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+});
 
 
 $("#resetPanelBtn")?.addEventListener("click",async()=>{

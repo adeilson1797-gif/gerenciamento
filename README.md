@@ -196,3 +196,16 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - O total diário continua gravado em `daily_sales` para preservar os dashboards existentes.
 - O salvamento da venda e da divisão por distribuidora é feito por RPC transacional no Supabase.
 - O reset do painel limpa também os lançamentos por distribuidora, preservando o cadastro das distribuidoras.
+
+
+## Evolução v4.6 — Representante por distribuidora
+
+- Novo quadro gerencial **Vendas por representante e distribuidora**.
+- Para cada representante, o gestor visualiza:
+  - distribuidora;
+  - valor vendido hoje;
+  - valor vendido no mês;
+  - participação daquela distribuidora nas vendas do representante.
+- Na tabela principal da equipe, cada representante passa a exibir um resumo de quanto vendeu em cada distribuidora.
+- O histórico de lançamentos mantém o detalhamento por distribuidora.
+- Exportação Excel e relatório PDF incluem a coluna **Distribuidoras**.

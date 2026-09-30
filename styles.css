@@ -83,3 +83,7 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .distributor-entry-row{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(120px,.8fr) auto;gap:8px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fbfdfb}
 .distributor-entry-row label{margin:0 0 4px}.distributor-entry-row .remove-row{align-self:end}
 @media(max-width:700px){.distributor-entry-row{grid-template-columns:1fr}.distributor-entry-row .remove-row{width:100%}}
+
+.dist-summary{font-size:12px;line-height:1.5;min-width:180px}
+.dist-summary strong{color:var(--dark)}
+.dist-summary .muted-line{color:var(--muted)}

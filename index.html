@@ -231,7 +231,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Representante</th><th>Status hoje</th><th>Hoje</th><th>Mês</th><th>Meta</th><th>% Meta</th><th>Necessário/dia útil</th><th>Último lançamento</th><th>Ações</th></tr></thead>
+            <thead><tr><th>#</th><th>Representante</th><th>Status hoje</th><th>Hoje</th><th>Mês</th><th>Por distribuidora</th><th>Meta</th><th>% Meta</th><th>Necessário/dia útil</th><th>Último lançamento</th><th>Ações</th></tr></thead>
             <tbody id="adminTeam"></tbody>
           </table>
         </div>
@@ -270,6 +270,21 @@
               </table>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div id="repDistributorBreakdownCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Vendas por representante e distribuidora</h2>
+            <p class="muted">Veja quanto cada representante vendeu em cada distribuidora no mês selecionado.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Representante</th><th>Distribuidora</th><th>Hoje</th><th>Mês</th><th>% das vendas do representante</th></tr></thead>
+            <tbody id="repDistributorBreakdownTable"></tbody>
+          </table>
         </div>
       </div>
 
