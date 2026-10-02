@@ -241,10 +241,16 @@
         <div class="kpi"><span>Projeção de fechamento</span><strong id="admProjection">R$ 0,00</strong></div>
       </div>
       <div class="grid grid-4">
-        <div class="kpi"><span>Meta da equipe</span><strong id="admTarget">R$ 0,00</strong></div>
-        <div class="kpi"><span>Atingimento</span><strong id="admPct">—</strong></div>
-        <div class="kpi"><span>Falta para meta</span><strong id="admRemaining">R$ 0,00</strong></div>
+        <div class="kpi"><span>Meta mensal da equipe</span><strong id="admTarget">R$ 0,00</strong></div>
+        <div class="kpi"><span>Atingimento mensal</span><strong id="admPct">—</strong></div>
+        <div class="kpi"><span>Falta para meta mensal</span><strong id="admRemaining">R$ 0,00</strong></div>
         <div class="kpi"><span>Necessário/dia útil</span><strong id="admDailyNeed">R$ 0,00</strong></div>
+      </div>
+      <div class="grid grid-4 item-kpi-grid">
+        <div class="kpi"><span>Total das metas por item</span><strong id="admItemTargetTotal">0 un.</strong></div>
+        <div class="kpi"><span>Realizado nas metas por item</span><strong id="admItemSoldTotal">0 un.</strong></div>
+        <div class="kpi"><span>Atingimento dos itens</span><strong id="admItemPct">—</strong></div>
+        <div class="kpi"><span>Falta nas metas por item</span><strong id="admItemRemaining">0 un.</strong></div>
       </div>
       <div id="adminResetCard" class="card danger-zone hidden">
         <div class="section-head">
@@ -263,6 +269,20 @@
         <div class="mini-kpi"><span>Pendentes hoje</span><strong id="admPending">0</strong></div>
       </div>
       <div class="status-legend"><span><i class="dot dot-sale"></i> Com venda</span><span><i class="dot dot-zero"></i> Sem venda</span><span><i class="dot dot-pending"></i> Pendente</span></div>
+
+      <div id="itemGoalCreateCard" class="card top-goal-card">
+        <div class="section-head">
+          <div>
+            <h2>Meta por item</h2>
+            <p class="muted">Defina a meta individual de produto para cada representante.</p>
+          </div>
+        </div>
+        <div class="goal-create-wrap">
+          
+        </div>
+      </div>
+
+
 
       <div id="userManagementCard" class="card hidden">
         <div class="section-head">
@@ -308,6 +328,21 @@
         </div>
       </div>
 
+      <div id="itemGoalsTrackingCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Metas ativas e acompanhamento</h2>
+            <p class="muted">Acompanhe as metas individuais por representante, item, realizado e percentual.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Representante</th><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Informou hoje</th><th>Ação</th></tr></thead>
+            <tbody id="itemGoalsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div id="distributorManagerCard" class="card">
         <div class="section-head">
           <div>
@@ -326,7 +361,7 @@
             <h3>Cadastradas</h3>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Distribuidora</th><th>Status</th><th>Ação</th></tr></thead>
+                <thead><tr><th>Distribuidora</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="distributorsTable"></tbody>
               </table>
             </div>
@@ -364,24 +399,7 @@
         </div>
       </div>
 
-      <div id="itemGoalsManagerCard" class="card">
-        <div class="section-head">
-          <div>
-            <h2>Metas por item</h2>
-            <p class="muted">Crie metas de quantidade individualmente para cada representante, da mesma forma que a meta mensal de vendas.</p>
-          </div>
-        </div>
-        <div class="grid grid-2 item-goal-manager-grid">
-          <form id="itemGoalForm" class="form">
-            <label>Representante</label>
-            <select id="goalRep" required>
-              <option value="">Selecione...</option>
-            </select>
-            <label>Item / Produto</label>
-            <input id="goalItemName" required placeholder="Ex.: NEUROMAX COGNIS">
-            <label>Meta de quantidade</label>
-            <input id="goalTargetQty" type="number" min="1" step="1" required placeholder="Ex.: 50">
-            <div class="grid grid-2">
+      <div class="grid grid-2">
               <div><label>Data inicial</label><input id="goalStartDate" type="date" required></div>
               <div><label>Data final</label><input id="goalEndDate" type="date" required></div>
             </div>

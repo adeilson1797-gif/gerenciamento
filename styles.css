@@ -100,3 +100,10 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .rank-bottom-card{margin-top:22px}
 .auto-total-note{font-size:12px;color:var(--muted)}
 @media(max-width:700px){.goal-date-row{align-items:stretch}.goal-date-row .btn{width:100%}}
+
+.item-kpi-grid{margin-top:12px}
+.top-goal-card{border-left:4px solid var(--green);margin-top:14px}
+.goal-create-wrap{max-width:780px}
+.goal-create-wrap .form{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}
+.goal-create-wrap .form>.grid,.goal-create-wrap .form>.btn,.goal-create-wrap .form>.msg{grid-column:1/-1}
+@media(max-width:760px){.goal-create-wrap .form{grid-template-columns:1fr}}

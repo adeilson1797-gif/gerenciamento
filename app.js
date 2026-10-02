@@ -532,6 +532,15 @@ async function loadAdmin(){
   $("#admPct").textContent=target>0?percent(totalMonth/target):"—";
   $("#admRemaining").textContent=money(remaining);
   $("#admDailyNeed").textContent=target>0?money(need):"—";
+  const activeItemGoals=(itemGoals||[]).filter(g=>g.active);
+  const activeGoalIds=new Set(activeItemGoals.map(g=>g.id));
+  const itemTargetTotal=activeItemGoals.reduce((s,g)=>s+Number(g.target_quantity||0),0);
+  const itemSoldTotal=(itemReports||[]).filter(r=>activeGoalIds.has(r.goal_id)).reduce((s,r)=>s+Number(r.quantity||0),0);
+  $("#admItemTargetTotal").textContent=`${itemTargetTotal} un.`;
+  $("#admItemSoldTotal").textContent=`${itemSoldTotal} un.`;
+  $("#admItemPct").textContent=itemTargetTotal>0?percent(itemSoldTotal/itemTargetTotal):"—";
+  $("#admItemRemaining").textContent=`${Math.max(itemTargetTotal-itemSoldTotal,0)} un.`;
+
   $("#admActive").textContent=reps.length;$("#admReported").textContent=reported;$("#admPending").textContent=Math.max(reps.length-reported,0);
 
   const ranked=[...reps].sort((a,b)=>(map[b.user_id]?.month||0)-(map[a.user_id]?.month||0));
@@ -664,10 +673,15 @@ window.toggleUserActive=async(userId,isActive)=>{
 
 function renderDistributorManager(){
   const rows=adminCache.distributors||[];
+  const canDelete=profile?.role==="admin";
   $("#distributorsTable").innerHTML=rows.map(d=>`<tr>
-    <td><strong>${d.name}</strong></td>
+    <td><input class="inline-edit distributor-name-edit" data-id="${d.id}" value="${String(d.name||"").replaceAll('"','&quot;')}"></td>
     <td><span class="${d.active?"user-status-active":"user-status-inactive"}">${d.active?"Ativa":"Inativa"}</span></td>
-    <td><button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button></td>
+    <td>
+      <button class="btn btn-xs btn-primary" onclick="saveDistributorName(${d.id})">Salvar nome</button>
+      <button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button>
+      ${canDelete?`<button class="btn btn-xs btn-danger" onclick="deleteDistributor(${d.id},'${String(d.name||"").replaceAll("'","&#39;")}')">Apagar</button>`:""}
+    </td>
   </tr>`).join("")||`<tr><td colspan="3">Nenhuma distribuidora cadastrada.</td></tr>`;
 }
 
@@ -782,6 +796,29 @@ window.toggleDistributor=async(id,active)=>{
   if(error)return alert(error.message);
   await loadAdmin();
 };
+
+window.saveDistributorName=async(id)=>{
+  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  const input=document.querySelector(`.distributor-name-edit[data-id="${id}"]`);
+  const name=input?.value.trim();
+  if(!name)return alert("Informe o nome da distribuidora.");
+  const {error}=await sb.from("distributors").update({name}).eq("id",id);
+  if(error)return alert(error.message);
+  await loadAdmin();
+};
+
+window.deleteDistributor=async(id,name)=>{
+  if(profile?.role!=="admin") return;
+  const ok=confirm(`Apagar a distribuidora "${name}"?`);
+  if(!ok)return;
+  const {error}=await sb.from("distributors").delete().eq("id",id);
+  if(error){
+    alert("Não foi possível apagar. Essa distribuidora pode possuir vendas ou pedidos vinculados. Para preservar o histórico, desative-a.");
+    return;
+  }
+  await loadAdmin();
+};
+
 
 function renderItemGoalsManager(){
   const goals=adminCache.itemGoals||[],reports=adminCache.itemReports||[],activeReps=adminCache.reps||[];
