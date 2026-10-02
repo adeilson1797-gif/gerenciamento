@@ -103,7 +103,10 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 
 .item-kpi-grid{margin-top:12px}
 .top-goal-card{border-left:4px solid var(--green);margin-top:14px}
-.goal-create-wrap{max-width:780px}
-.goal-create-wrap .form{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}
-.goal-create-wrap .form>.grid,.goal-create-wrap .form>.btn,.goal-create-wrap .form>.msg{grid-column:1/-1}
-@media(max-width:760px){.goal-create-wrap .form{grid-template-columns:1fr}}
+.goal-create-form{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px;align-items:end}
+.goal-create-form>div{min-width:0}
+.goal-create-form label{display:block;margin-bottom:6px}
+.goal-create-action{display:flex;align-items:end}
+.goal-create-action .btn{width:100%}
+@media(max-width:1100px){.goal-create-form{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+@media(max-width:650px){.goal-create-form{grid-template-columns:1fr}}

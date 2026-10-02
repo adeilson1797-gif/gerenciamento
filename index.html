@@ -277,9 +277,34 @@
             <p class="muted">Defina a meta individual de produto para cada representante.</p>
           </div>
         </div>
-        <div class="goal-create-wrap">
-          
-        </div>
+        <form id="itemGoalForm" class="form goal-create-form">
+          <div>
+            <label>Representante</label>
+            <select id="goalRep" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div>
+            <label>Item / Produto</label>
+            <input id="goalItemName" required placeholder="Ex.: NEUROMAX COGNIS">
+          </div>
+          <div>
+            <label>Meta de quantidade</label>
+            <input id="goalTargetQty" type="number" min="1" step="1" required placeholder="Ex.: 50">
+          </div>
+          <div>
+            <label>Data inicial</label>
+            <input id="goalStartDate" type="date" required>
+          </div>
+          <div>
+            <label>Data final</label>
+            <input id="goalEndDate" type="date" required>
+          </div>
+          <div class="goal-create-action">
+            <button class="btn btn-primary" type="submit">Criar meta por item</button>
+          </div>
+        </form>
+        <p id="itemGoalMsg" class="msg"></p>
       </div>
 
 
@@ -396,25 +421,6 @@
             <thead><tr><th>Distribuidora</th><th>Hoje</th><th>Mês</th><th>% do total do mês</th></tr></thead>
             <tbody id="distributorSalesTable"></tbody>
           </table>
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-              <div><label>Data inicial</label><input id="goalStartDate" type="date" required></div>
-              <div><label>Data final</label><input id="goalEndDate" type="date" required></div>
-            </div>
-            <button class="btn btn-primary" type="submit">Criar meta por item</button>
-            <p id="itemGoalMsg" class="msg"></p>
-          </form>
-          <div>
-            <h3>Metas ativas e acompanhamento</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Representante</th><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Informou hoje</th><th>Ação</th></tr></thead>
-                <tbody id="itemGoalsTable"></tbody>
-              </table>
-            </div>
-          </div>
         </div>
       </div>
 

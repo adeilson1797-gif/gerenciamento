@@ -809,11 +809,10 @@ window.saveDistributorName=async(id)=>{
 
 window.deleteDistributor=async(id,name)=>{
   if(profile?.role!=="admin") return;
-  const ok=confirm(`Apagar a distribuidora "${name}"?`);
-  if(!ok)return;
+  if(!confirm(`Apagar a distribuidora "${name}"?`)) return;
   const {error}=await sb.from("distributors").delete().eq("id",id);
   if(error){
-    alert("Não foi possível apagar. Essa distribuidora pode possuir vendas ou pedidos vinculados. Para preservar o histórico, desative-a.");
+    alert("Não foi possível apagar. Essa distribuidora possui vendas ou pedidos vinculados. Use Desativar para preservar o histórico.");
     return;
   }
   await loadAdmin();

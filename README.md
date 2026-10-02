@@ -259,10 +259,16 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - O lançamento manual do total do dia foi removido; o resumo passa a ser automático pelos pedidos.
 
 
-## Evolução v4.9 — Metas no topo e gestão de distribuidoras
+## Correção v4.9.1
 
-- A criação de meta por item foi movida para a parte superior do painel ADM, junto da visão das metas mensais.
-- O topo agora mostra o total das metas por item, total realizado, percentual e saldo em unidades.
-- Metas ativas e acompanhamento ficam logo abaixo do Histórico e Correção.
-- Distribuidoras agora podem ter o nome editado.
-- Administrador Geral pode apagar distribuidora quando ela não possuir vínculos históricos; quando houver vínculos, o sistema orienta a desativação.
+- Restaurado o formulário completo de criação de meta por item na parte superior do painel ADM.
+- Campos restaurados:
+  - representante;
+  - item/produto;
+  - meta de quantidade;
+  - data inicial;
+  - data final;
+  - botão Criar meta por item.
+- Mantidos os KPIs das metas por item no topo.
+- Mantida a seção Metas ativas e acompanhamento abaixo do Histórico e Correção.
+- Mantidas as opções de editar, desativar e apagar distribuidoras conforme permissão.
