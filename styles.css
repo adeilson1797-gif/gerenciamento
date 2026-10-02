@@ -87,3 +87,8 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .dist-summary{font-size:12px;line-height:1.5;min-width:180px}
 .dist-summary strong{color:var(--dark)}
 .dist-summary .muted-line{color:var(--muted)}
+
+.order-grids{margin-top:18px;align-items:start}
+.order-grids h3{margin-top:0}
+.cnpj-chip{font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:nowrap}
+@media(max-width:900px){.order-grids{grid-template-columns:1fr}}

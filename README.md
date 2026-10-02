@@ -209,3 +209,23 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Na tabela principal da equipe, cada representante passa a exibir um resumo de quanto vendeu em cada distribuidora.
 - O histórico de lançamentos mantém o detalhamento por distribuidora.
 - Exportação Excel e relatório PDF incluem a coluna **Distribuidoras**.
+
+
+## Evolução v4.7 — Pedidos detalhados por cliente/CNPJ
+
+### Painel do especialista
+- Novo acompanhamento de pedidos com CNPJ, Razão Social, Valor do Pedido, Número do Pedido, Distribuidora e Data.
+- Clientes ficam salvos por especialista para autopreenchimento em pedidos futuros.
+- Autopreenchimento funciona por CNPJ ou Razão Social.
+- Histórico dos últimos pedidos do mês.
+- Ranking próprio por CNPJ, somando todos os pedidos de cada cliente.
+
+### Painel gerencial
+- Ranking consolidado por CNPJ no mês selecionado.
+- Mostra quantidade de pedidos, quantidade de representantes que venderam ao cliente e total vendido.
+- Administrador Geral e Subadministrador podem visualizar o consolidado da equipe.
+
+### Segurança
+- Especialistas veem apenas seus próprios clientes e pedidos.
+- Gestores podem visualizar todos os clientes e pedidos.
+- O reset operacional apaga os pedidos detalhados, mas preserva a carteira de clientes para manter o autopreenchimento.
