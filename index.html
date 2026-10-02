@@ -120,6 +120,10 @@
             <h2>Acompanhamento de pedidos</h2>
             <p class="muted">Registre cada pedido por cliente. Os clientes ficam salvos para autopreenchimento nos próximos pedidos.</p>
           </div>
+          <div class="action-row">
+            <button id="repExportCsvBtn" class="btn btn-light btn-xs" type="button">Exportar CSV</button>
+            <button id="repExportPdfBtn" class="btn btn-light btn-xs" type="button">Exportar PDF</button>
+          </div>
         </div>
         <form id="orderForm" class="form">
           <div class="grid grid-2">
@@ -188,6 +192,15 @@
           <button id="saveItemGoalsBtn" class="btn btn-primary" type="button">Salvar informações dos itens</button>
         </div>
         <div id="repItemGoals" class="goal-report-grid"></div>
+        <div class="goal-count-summary">
+          <h3>Contagem das minhas metas por item</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Item</th><th>Meta</th><th>Realizado</th><th>Falta</th><th>% atingido</th></tr></thead>
+              <tbody id="repItemGoalCountTable"></tbody>
+            </table>
+          </div>
+        </div>
         <p id="repItemGoalsMsg" class="msg"></p>
       </div>
 
@@ -364,6 +377,21 @@
           <table>
             <thead><tr><th>Representante</th><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Informou hoje</th><th>Ação</th></tr></thead>
             <tbody id="itemGoalsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="itemPerformanceCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Desempenho das metas por item</h2>
+            <p class="muted">Contagem separada por produto. A lista é ordenada pelo percentual atingido para mostrar quais itens estão avançando mais rápido.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Posição</th><th>Item</th><th>Representantes</th><th>Meta total</th><th>Vendido</th><th>Falta</th><th>% atingido</th></tr></thead>
+            <tbody id="itemPerformanceTable"></tbody>
           </table>
         </div>
       </div>

@@ -14,7 +14,7 @@ function formatCNPJ(value){
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12,14)}`;
 }
 
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], dailyChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, dailyChart=null;
 
 function showOnly(id){
   ["#authView","#resetView","#repView","#adminView"].forEach(x=>{
@@ -181,6 +181,7 @@ async function loadRepOrders(){
   $("#orderDistributor").innerHTML='<option value="">Selecione...</option>'+(distributors||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
 
   const distNames=Object.fromEntries((distributors||[]).map(d=>[String(d.id),d.name]));
+  repOrderDistributorMap=distNames;
   $("#repOrdersTable").innerHTML=repOrdersCache.slice(0,30).map(o=>`<tr>
     <td>${o.order_date.split("-").reverse().join("/")}</td>
     <td><span class="cnpj-chip">${formatCNPJ(o.cnpj)}</span></td>
@@ -271,6 +272,58 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   await loadRep();
 });
 
+
+
+function repOrderExportRows(){
+  return [...(repOrdersCache||[])].sort((a,b)=>a.order_date.localeCompare(b.order_date)).map(o=>({
+    Data:o.order_date.split("-").reverse().join("/"),
+    CNPJ:formatCNPJ(o.cnpj),
+    "Razão Social":o.legal_name,
+    Distribuidora:repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora",
+    "Número do Pedido":o.order_number,
+    Valor:Number(o.amount||0)
+  }));
+}
+
+function escapeCsvCell(value){
+  const s=String(value??"");
+  return `"${s.replaceAll('"','""')}"`;
+}
+
+$("#repExportCsvBtn")?.addEventListener("click",()=>{
+  const rows=repOrderExportRows();
+  if(!rows.length)return alert("Não há pedidos no mês para exportar.");
+  const headers=["Data","CNPJ","Razão Social","Distribuidora","Número do Pedido","Valor"];
+  const lines=[
+    headers.map(escapeCsvCell).join(";"),
+    ...rows.map(r=>[
+      r.Data,r.CNPJ,r["Razão Social"],r.Distribuidora,r["Número do Pedido"],
+      Number(r.Valor||0).toFixed(2).replace(".",",")
+    ].map(escapeCsvCell).join(";"))
+  ];
+  const total=rows.reduce((s,r)=>s+Number(r.Valor||0),0);
+  lines.push("");
+  lines.push(`${escapeCsvCell("TOTAL")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell(total.toFixed(2).replace(".",","))}`);
+  const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;
+  a.download=`minhas-vendas-${monthNow()}.csv`;
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+});
+
+$("#repExportPdfBtn")?.addEventListener("click",()=>{
+  const rows=repOrderExportRows();
+  if(!rows.length)return alert("Não há pedidos no mês para exportar.");
+  const total=rows.reduce((s,r)=>s+Number(r.Valor||0),0);
+  const w=window.open("","_blank");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Minhas vendas</title>
+  <style>body{font-family:Arial;padding:28px;color:#222}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#eef7f1}.total{margin-top:16px;font-size:18px;font-weight:bold}</style>
+  </head><body><h1>Minhas vendas — ${profile?.name||"Representante"}</h1><p>Período: ${monthNow()}</p>
+  <table><thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Distribuidora}</td><td>${r["Número do Pedido"]}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
+  <div class="total">Total: ${money(total)}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+});
 
 async function loadRepDistributorSummary(){
   if(!user || profile?.role!=="rep") return;
@@ -412,6 +465,7 @@ async function loadRepItemGoals(dateStr){
   const wrap=$("#repItemGoals");
   if(!repGoalCache.length){
     wrap.innerHTML='<div class="muted">Nenhuma meta individual por item ativa para esta data.</div>';
+    $("#repItemGoalCountTable").innerHTML='<tr><td colspan="5">Nenhuma meta ativa.</td></tr>';
     $("#repItemGoalStatus").textContent="Sem metas hoje";
     return;
   }
@@ -443,8 +497,32 @@ async function loadRepItemGoals(dateStr){
     }));
   });
 
+  renderRepItemGoalCount();
   const done=repGoalCache.filter(x=>x.report).length;
   $("#repItemGoalStatus").textContent=`${done}/${repGoalCache.length} informados`;
+}
+
+
+function renderRepItemGoalCount(){
+  const rows=(repGoalCache||[]).map(({goal,periodSold})=>{
+    const target=Number(goal.target_quantity||0);
+    const sold=Number(periodSold||0);
+    return {
+      item:goal.item_name,
+      target,
+      sold,
+      remaining:Math.max(target-sold,0),
+      pct:target>0?sold/target:0
+    };
+  }).sort((a,b)=>b.pct-a.pct||b.sold-a.sold);
+
+  $("#repItemGoalCountTable").innerHTML=rows.map(r=>`<tr>
+    <td><strong>${r.item}</strong></td>
+    <td>${r.target} un.</td>
+    <td>${r.sold} un.</td>
+    <td>${r.remaining} un.</td>
+    <td><strong>${percent(r.pct)}</strong><div class="progress-mini"><i style="width:${Math.min(r.pct*100,100)}%"></i></div></td>
+  </tr>`).join("")||`<tr><td colspan="5">Nenhuma meta ativa.</td></tr>`;
 }
 
 async function saveRequiredItemGoalReports(dateStr){
@@ -580,6 +658,7 @@ async function loadAdmin(){
   renderAdminSalesHistory();
   renderUserManagement();
   renderItemGoalsManager();
+  renderItemPerformance();
   renderDistributorManager();
   renderDistributorSales();
   renderRepDistributorBreakdown();
@@ -670,6 +749,45 @@ window.toggleUserActive=async(userId,isActive)=>{
   await loadAdmin();
 };
 
+
+
+function normalizeItemName(name){
+  return String(name||"").trim().replace(/\s+/g," ").toUpperCase();
+}
+
+function renderItemPerformance(){
+  const goals=(adminCache.itemGoals||[]).filter(g=>g.active&&g.assigned_user_id);
+  const reports=adminCache.itemReports||[];
+  const grouped={};
+
+  goals.forEach(g=>{
+    const key=normalizeItemName(g.item_name);
+    grouped[key]||={item:g.item_name,target:0,sold:0,reps:new Set(),goalIds:new Set()};
+    grouped[key].target+=Number(g.target_quantity||0);
+    grouped[key].reps.add(g.assigned_user_id);
+    grouped[key].goalIds.add(g.id);
+  });
+
+  Object.values(grouped).forEach(group=>{
+    group.sold=reports
+      .filter(r=>group.goalIds.has(r.goal_id))
+      .reduce((s,r)=>s+Number(r.quantity||0),0);
+    group.remaining=Math.max(group.target-group.sold,0);
+    group.pct=group.target>0?group.sold/group.target:0;
+  });
+
+  const ranking=Object.values(grouped).sort((a,b)=>b.pct-a.pct||b.sold-a.sold||a.item.localeCompare(b.item));
+
+  $("#itemPerformanceTable").innerHTML=ranking.map((r,i)=>`<tr>
+    <td><span class="rank-badge">${i+1}º</span></td>
+    <td><strong>${r.item}</strong></td>
+    <td>${r.reps.size}</td>
+    <td>${r.target} un.</td>
+    <td>${r.sold} un.</td>
+    <td>${r.remaining} un.</td>
+    <td class="${i===0&&r.pct>0?"item-hit-fast":""}"><strong>${percent(r.pct)}</strong><div class="progress-mini"><i style="width:${Math.min(r.pct*100,100)}%"></i></div></td>
+  </tr>`).join("")||`<tr><td colspan="7">Nenhuma meta por item ativa.</td></tr>`;
+}
 
 function renderDistributorManager(){
   const rows=adminCache.distributors||[];

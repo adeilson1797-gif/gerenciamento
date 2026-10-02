@@ -110,3 +110,9 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .goal-create-action .btn{width:100%}
 @media(max-width:1100px){.goal-create-form{grid-template-columns:repeat(2,minmax(180px,1fr))}}
 @media(max-width:650px){.goal-create-form{grid-template-columns:1fr}}
+
+.goal-count-summary{margin-top:18px}
+.goal-count-summary h3{margin:0 0 10px}
+.item-speed-rank{font-weight:900}
+.item-hit-fast{font-weight:800;color:#146b38}
+.export-note{font-size:12px;color:var(--muted)}

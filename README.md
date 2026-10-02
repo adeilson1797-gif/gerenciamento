@@ -272,3 +272,24 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Mantidos os KPIs das metas por item no topo.
 - Mantida a seção Metas ativas e acompanhamento abaixo do Histórico e Correção.
 - Mantidas as opções de editar, desativar e apagar distribuidoras conforme permissão.
+
+
+## Evolução v5.0 — Contagem por item e exportação do representante
+
+### Painel gerencial
+- Nova tabela **Desempenho das metas por item**.
+- Produtos iguais são agrupados e contados separadamente dos demais itens.
+- Exemplo: B12 ORODISPERSÍVEL, COENZIMA Q10 200MG, BILIPLEX ABACAXI e BILIPLEX BOLDO aparecem em linhas independentes.
+- Para cada produto o painel mostra:
+  - número de representantes com meta;
+  - meta total em unidades;
+  - quantidade vendida;
+  - quanto falta;
+  - percentual atingido.
+- A tabela é ordenada pelo percentual atingido, facilitando identificar os itens que estão alcançando a meta mais rápido.
+
+### Painel do representante
+- Nova tabela **Contagem das minhas metas por item**, com Meta, Realizado, Falta e % atingido.
+- A contagem fica separada para cada produto.
+- Adicionados botões **Exportar CSV** e **Exportar PDF** na área de pedidos.
+- Os arquivos exportados incluem Data, CNPJ, Razão Social, Distribuidora, Número do Pedido, Valor e total geral.
