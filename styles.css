@@ -92,3 +92,11 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 .order-grids h3{margin-top:0}
 .cnpj-chip{font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:nowrap}
 @media(max-width:900px){.order-grids{grid-template-columns:1fr}}
+
+.orders-list-block{margin-top:18px}
+.goal-date-row{display:flex;align-items:end;gap:12px;justify-content:space-between;margin:12px 0 16px;flex-wrap:wrap}
+.goal-date-row>div{min-width:210px}
+.goal-progress-text{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin:8px 0 5px}
+.rank-bottom-card{margin-top:22px}
+.auto-total-note{font-size:12px;color:var(--muted)}
+@media(max-width:700px){.goal-date-row{align-items:stretch}.goal-date-row .btn{width:100%}}

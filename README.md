@@ -229,3 +229,31 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Especialistas veem apenas seus próprios clientes e pedidos.
 - Gestores podem visualizar todos os clientes e pedidos.
 - O reset operacional apaga os pedidos detalhados, mas preserva a carteira de clientes para manter o autopreenchimento.
+
+
+## Evolução v4.8 — Automação dos pedidos e metas individuais
+
+### Pedidos como fonte das vendas
+- O representante não precisa mais lançar o total diário manualmente.
+- Cada pedido salvo entra automaticamente na soma do dia.
+- O Supabase recalcula automaticamente:
+  - total diário do representante;
+  - total mensal;
+  - total por distribuidora;
+  - painel gerencial.
+- Alterações futuras em pedidos também podem ser refletidas pelo mecanismo de sincronização do banco.
+
+### Metas por item individualizadas
+- Administrador Geral e Subadministrador passam a criar a meta por item escolhendo o representante.
+- Cada meta possui:
+  - representante;
+  - item;
+  - quantidade-alvo;
+  - período.
+- O gerencial mostra meta, realizado, percentual e se o representante informou o item no dia.
+- O representante vê claramente a sua meta de cada item e o progresso acumulado.
+
+### Painel do representante
+- Novo resumo de vendas por distribuidora com valores de hoje e do mês.
+- Ranking por CNPJ foi movido para o final do painel para melhorar a organização visual.
+- O lançamento manual do total do dia foi removido; o resumo passa a ser automático pelos pedidos.

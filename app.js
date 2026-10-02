@@ -150,9 +150,9 @@ async function loadRep(){
   $("#repProgress").style.width=`${Math.min(p*100,100)}%`;
   $("#repDailyNeed").textContent=target>0?`Média necessária: ${money(need)}/dia útil`:"Média necessária: —";
   $("#repDaysLeft").textContent=`Dias úteis restantes: ${days}`;
-  $("#repHistory").innerHTML=rows.slice(0,12).map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note||"—"}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum lançamento no mês.</td></tr>`;
+  $("#repHistory").innerHTML=rows.slice(0,12).map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note==="Total automático dos pedidos"?"Pedidos cadastrados":(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido lançado no mês.</td></tr>`;
   await loadRepItemGoals($("#saleDate").value||today());
-  await loadRepDistributors($("#saleDate").value||today());
+  await loadRepDistributorSummary();
   await loadRepOrders();
 }
 
@@ -268,8 +268,37 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   setMsg($("#orderMsg"),"Pedido salvo. Cliente armazenado para autopreenchimento.","ok");
   $("#orderAmount").value="";
   $("#orderNumber").value="";
-  await loadRepOrders();
+  await loadRep();
 });
+
+
+async function loadRepDistributorSummary(){
+  if(!user || profile?.role!=="rep") return;
+  const mk=monthNow(),{start,next}=monthBounds(mk);
+  const [{data:rows,error:rErr},{data:distributors,error:dErr}] = await Promise.all([
+    sb.from("daily_sales_distributors").select("*").eq("user_id",user.id).gte("sale_date",start).lt("sale_date",next),
+    sb.from("distributors").select("*").order("name")
+  ]);
+  if(rErr||dErr){
+    console.error(rErr||dErr);
+    return;
+  }
+  const all=rows||[], monthTotal=all.reduce((s,r)=>s+Number(r.amount||0),0);
+  const grouped={};
+  (distributors||[]).forEach(d=>grouped[d.id]={name:d.name,today:0,month:0});
+  all.forEach(r=>{
+    grouped[r.distributor_id]||={name:"Distribuidora",today:0,month:0};
+    grouped[r.distributor_id].month+=Number(r.amount||0);
+    if(r.sale_date===today()) grouped[r.distributor_id].today+=Number(r.amount||0);
+  });
+  const list=Object.values(grouped).filter(x=>x.month>0||x.today>0).sort((a,b)=>b.month-a.month);
+  $("#repDistributorSummaryTable").innerHTML=list.map(x=>`<tr>
+    <td><strong>${x.name}</strong></td>
+    <td>${money(x.today)}</td>
+    <td>${money(x.month)}</td>
+    <td>${monthTotal>0?percent(x.month/monthTotal):"—"}</td>
+  </tr>`).join("")||`<tr><td colspan="4">Nenhuma venda por distribuidora neste mês.</td></tr>`;
+}
 
 async function loadRepDistributors(dateStr){
   if(!user || profile?.role!=="rep") return;
@@ -341,43 +370,79 @@ $("#addDistributorRowBtn")?.addEventListener("click",()=>addDistributorEntryRow(
 async function loadRepItemGoals(dateStr){
   if(!user || profile?.role!=="rep") return;
   setMsg($("#repItemGoalsMsg"),"");
-  const [{data:goals,error:gErr},{data:reports,error:rErr}] = await Promise.all([
-    sb.from("item_goals").select("*").eq("active",true).lte("start_date",dateStr).gte("end_date",dateStr).order("item_name"),
-    sb.from("item_goal_reports").select("*").eq("user_id",user.id).eq("report_date",dateStr)
-  ]);
-  if(gErr||rErr){
-    setMsg($("#repItemGoalsMsg"),(gErr||rErr).message);
+
+  const {data:goals,error:gErr}=await sb.from("item_goals")
+    .select("*")
+    .eq("active",true)
+    .lte("start_date",dateStr)
+    .gte("end_date",dateStr)
+    .order("item_name");
+
+  if(gErr){
+    setMsg($("#repItemGoalsMsg"),gErr.message);
     return;
   }
-  const reportMap=Object.fromEntries((reports||[]).map(r=>[r.goal_id,r]));
-  repGoalCache=(goals||[]).map(g=>({goal:g,report:reportMap[g.id]||null}));
+
+  const myGoals=(goals||[]).filter(g=>!g.assigned_user_id||g.assigned_user_id===user.id);
+  let reports=[];
+  if(myGoals.length){
+    const ids=myGoals.map(g=>g.id);
+    const minStart=myGoals.reduce((m,g)=>!m||g.start_date<m?g.start_date:m,null);
+    const maxEnd=myGoals.reduce((m,g)=>!m||g.end_date>m?g.end_date:m,null);
+    const {data:rData,error:rErr}=await sb.from("item_goal_reports")
+      .select("*")
+      .eq("user_id",user.id)
+      .in("goal_id",ids)
+      .gte("report_date",minStart)
+      .lte("report_date",maxEnd);
+    if(rErr){
+      setMsg($("#repItemGoalsMsg"),rErr.message);
+      return;
+    }
+    reports=rData||[];
+  }
+
+  const todayMap=Object.fromEntries(reports.filter(r=>r.report_date===dateStr).map(r=>[r.goal_id,r]));
+  repGoalCache=myGoals.map(g=>({
+    goal:g,
+    report:todayMap[g.id]||null,
+    periodSold:reports.filter(r=>r.goal_id===g.id).reduce((s,r)=>s+Number(r.quantity||0),0)
+  }));
+
   const wrap=$("#repItemGoals");
   if(!repGoalCache.length){
-    wrap.innerHTML='<div class="muted">Nenhuma meta por item ativa para esta data.</div>';
-    $("#repItemGoalStatus").textContent="Sem itens hoje";
+    wrap.innerHTML='<div class="muted">Nenhuma meta individual por item ativa para esta data.</div>';
+    $("#repItemGoalStatus").textContent="Sem metas hoje";
     return;
   }
-  wrap.innerHTML=repGoalCache.map(({goal,report})=>{
+
+  wrap.innerHTML=repGoalCache.map(({goal,report,periodSold})=>{
     const sold=report?.sold===true, no=report?.sold===false, qty=Number(report?.quantity||0);
+    const target=Number(goal.target_quantity||0);
+    const pct=target>0?periodSold/target:0;
     return `<div class="goal-report-item ${report?"goal-complete":""}" data-goal-id="${goal.id}">
       <h3>${goal.item_name}</h3>
-      <div class="goal-meta">Meta do período: ${goal.target_quantity} un. • ${goal.start_date.split("-").reverse().join("/")} a ${goal.end_date.split("-").reverse().join("/")}</div>
+      <div class="goal-meta"><strong>Minha meta: ${target} un.</strong> • ${goal.start_date.split("-").reverse().join("/")} a ${goal.end_date.split("-").reverse().join("/")}</div>
+      <div class="goal-progress-text"><span>Realizado: <strong>${periodSold} un.</strong></span><span>${target>0?percent(pct):"—"}</span></div>
+      <div class="progress-mini"><i style="width:${Math.min(pct*100,100)}%"></i></div>
       <div class="goal-choice">
-        <label><input type="radio" name="goal_${goal.id}" value="yes" ${sold?"checked":""}> Vendi</label>
-        <label><input type="radio" name="goal_${goal.id}" value="no" ${no?"checked":""}> Não vendi</label>
+        <label><input type="radio" name="goal_${goal.id}" value="yes" ${sold?"checked":""}> Vendi hoje</label>
+        <label><input type="radio" name="goal_${goal.id}" value="no" ${no?"checked":""}> Não vendi hoje</label>
       </div>
       <div class="goal-qty ${sold?"":"hidden"}">
-        <label>Quantidade vendida</label>
+        <label>Quantidade vendida hoje</label>
         <input type="number" min="1" step="1" class="goal-qty-input" value="${sold?qty:""}" placeholder="Quantidade">
       </div>
     </div>`;
   }).join("");
+
   repGoalCache.forEach(({goal})=>{
     document.querySelectorAll(`input[name="goal_${goal.id}"]`).forEach(r=>r.addEventListener("change",()=>{
       const box=document.querySelector(`[data-goal-id="${goal.id}"]`);
       box.querySelector(".goal-qty").classList.toggle("hidden",r.value!=="yes"||!r.checked);
     }));
   });
+
   const done=repGoalCache.filter(x=>x.report).length;
   $("#repItemGoalStatus").textContent=`${done}/${repGoalCache.length} informados`;
 }
@@ -402,35 +467,15 @@ async function saveRequiredItemGoalReports(dateStr){
   return {ok:true};
 }
 
-$("#saleDate")?.addEventListener("change",()=>{loadRepItemGoals($("#saleDate").value);loadRepDistributors($("#saleDate").value);});
+$("#saleDate")?.addEventListener("change",()=>loadRepItemGoals($("#saleDate").value));
 
-$("#saleForm").addEventListener("submit",async e=>{
-  e.preventDefault();
-  setMsg($("#saleMsg"),"");setMsg($("#repItemGoalsMsg"),"");setMsg($("#repDistributorMsg"),"");
-  const saleDate=$("#saleDate").value;
-
-  const itemResult=await saveRequiredItemGoalReports(saleDate);
-  if(!itemResult.ok){
-    setMsg($("#repItemGoalsMsg"),itemResult.message);
-    return;
-  }
-
-  const breakdown=collectDistributorBreakdown();
-  if(!breakdown.ok){
-    setMsg($("#repDistributorMsg"),breakdown.message);
-    return;
-  }
-
-  const {data:total,error}=await sb.rpc("save_daily_sale_with_distributors",{
-    p_sale_date:saleDate,
-    p_note:$("#saleNote").value.trim()||null,
-    p_breakdown:breakdown.data
-  });
-  if(error)return setMsg($("#saleMsg"),error.message);
-
-  setMsg($("#saleMsg"),`Venda salva com sucesso. Total do dia: ${money(total)}.`,"ok");
-  $("#saleNote").value="";
-  await loadRep();
+$("#saveItemGoalsBtn")?.addEventListener("click",async()=>{
+  setMsg($("#repItemGoalsMsg"),"");
+  const dateStr=$("#saleDate").value||today();
+  const result=await saveRequiredItemGoalReports(dateStr);
+  if(!result.ok)return setMsg($("#repItemGoalsMsg"),result.message);
+  setMsg($("#repItemGoalsMsg"),"Informações dos itens salvas com sucesso.","ok");
+  await loadRepItemGoals(dateStr);
 });
 
 async function loadAdmin(){
@@ -461,6 +506,12 @@ async function loadAdmin(){
   if(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||cErr){console.error(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||cErr);return;}
   const allProfiles=profiles||[];
   const reps=allProfiles.filter(r=>r.role==="rep"&&r.active), map={};
+  const goalRep=$("#goalRep");
+  if(goalRep){
+    const keep=goalRep.value;
+    goalRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");
+    if(reps.some(r=>r.user_id===keep)) goalRep.value=keep;
+  }
   (sales||[]).forEach(s=>{map[s.user_id]||={month:0,today:0,last:null,hasToday:false};map[s.user_id].month+=Number(s.amount||0);if(s.sale_date===today()){map[s.user_id].today+=Number(s.amount||0);map[s.user_id].hasToday=true;}if(!map[s.user_id].last||s.sale_date>map[s.user_id].last)map[s.user_id].last=s.sale_date;});
   const totalMonth=Object.values(map).reduce((a,b)=>a+b.month,0),totalToday=Object.values(map).reduce((a,b)=>a+b.today,0),target=reps.reduce((a,b)=>a+Number(b.monthly_target||0),0);
   const yesterday=previousDateISO();
@@ -735,27 +786,33 @@ window.toggleDistributor=async(id,active)=>{
 function renderItemGoalsManager(){
   const goals=adminCache.itemGoals||[],reports=adminCache.itemReports||[],activeReps=adminCache.reps||[];
   const todayStr=today();
-  $("#itemGoalsTable").innerHTML=goals.map(g=>{
-    const relevant=reports.filter(r=>r.goal_id===g.id);
+  const repNames=Object.fromEntries(activeReps.map(r=>[r.user_id,r.name]));
+  const individualGoals=goals.filter(g=>g.assigned_user_id);
+
+  $("#itemGoalsTable").innerHTML=individualGoals.map(g=>{
+    const relevant=reports.filter(r=>r.goal_id===g.id&&r.user_id===g.assigned_user_id);
     const soldQty=relevant.reduce((s,r)=>s+Number(r.quantity||0),0);
     const pct=Number(g.target_quantity)>0?soldQty/Number(g.target_quantity):0;
-    const answeredToday=relevant.filter(r=>r.report_date===todayStr).length;
+    const answeredToday=relevant.some(r=>r.report_date===todayStr);
     const inPeriod=todayStr>=g.start_date&&todayStr<=g.end_date&&g.active;
     return `<tr>
+      <td><strong>${repNames[g.assigned_user_id]||"Representante"}</strong></td>
       <td><strong>${g.item_name}</strong><br><span class="goal-status-pill ${inPeriod?"":"closed"}">${inPeriod?"Ativa":"Fora do período"}</span></td>
       <td>${g.start_date.split("-").reverse().join("/")}<br>${g.end_date.split("-").reverse().join("/")}</td>
-      <td>${g.target_quantity}</td><td>${soldQty}</td>
+      <td>${g.target_quantity}</td>
+      <td>${soldQty}</td>
       <td>${(pct*100).toFixed(1)}%<div class="progress-mini"><i style="width:${Math.min(pct*100,100)}%"></i></div></td>
-      <td>${answeredToday}/${activeReps.length}</td>
+      <td>${answeredToday?"Sim":"Pendente"}</td>
       <td><button class="btn btn-xs btn-light" onclick="toggleItemGoal(${g.id},${g.active})">${g.active?"Encerrar":"Reativar"}</button></td>
     </tr>`;
-  }).join("")||`<tr><td colspan="7">Nenhuma meta por item criada.</td></tr>`;
+  }).join("")||`<tr><td colspan="8">Nenhuma meta individual por item criada.</td></tr>`;
 }
 
 $("#itemGoalForm")?.addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#itemGoalMsg"),"");
   if(!["admin","sub_admin"].includes(profile?.role)) return;
   const row={
+    assigned_user_id:$("#goalRep").value,
     item_name:$("#goalItemName").value.trim(),
     target_quantity:Number($("#goalTargetQty").value),
     start_date:$("#goalStartDate").value,
@@ -763,11 +820,12 @@ $("#itemGoalForm")?.addEventListener("submit",async e=>{
     created_by:user.id,
     active:true
   };
+  if(!row.assigned_user_id)return setMsg($("#itemGoalMsg"),"Selecione o representante.");
   if(!row.item_name||!Number.isInteger(row.target_quantity)||row.target_quantity<=0)return setMsg($("#itemGoalMsg"),"Informe item e quantidade válida.");
   if(row.end_date<row.start_date)return setMsg($("#itemGoalMsg"),"A data final não pode ser anterior à inicial.");
   const {error}=await sb.from("item_goals").insert(row);
   if(error)return setMsg($("#itemGoalMsg"),error.message);
-  setMsg($("#itemGoalMsg"),"Meta por item criada com sucesso.","ok");
+  setMsg($("#itemGoalMsg"),"Meta individual por item criada com sucesso.","ok");
   $("#goalItemName").value="";$("#goalTargetQty").value="";
   await loadAdmin();
 });

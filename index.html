@@ -146,73 +146,80 @@
           <p id="orderMsg" class="msg"></p>
         </form>
 
-        <div class="grid grid-2 order-grids">
-          <div>
-            <h3>Últimos pedidos</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
-                <tbody id="repOrdersTable"></tbody>
-              </table>
-            </div>
+        <div class="orders-list-block">
+          <h3>Últimos pedidos</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
+              <tbody id="repOrdersTable"></tbody>
+            </table>
           </div>
+        </div>
+      </div>
+
+      <div id="repDistributorSummaryCard" class="card">
+        <div class="section-head">
           <div>
-            <h3>Ranking por CNPJ</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>#</th><th>CNPJ</th><th>Razão Social</th><th>Pedidos</th><th>Total</th></tr></thead>
-                <tbody id="repCnpjRankingTable"></tbody>
-              </table>
-            </div>
+            <h2>Total de vendas por distribuidora</h2>
+            <p class="muted">Os valores são calculados automaticamente a partir dos pedidos cadastrados.</p>
           </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Distribuidora</th><th>Hoje</th><th>Mês</th><th>% das minhas vendas</th></tr></thead>
+            <tbody id="repDistributorSummaryTable"></tbody>
+          </table>
         </div>
       </div>
 
       <div id="repItemGoalsCard" class="card item-goals-card">
         <div class="section-head">
           <div>
-            <h2>Itens da meta do dia</h2>
-            <p class="muted">Antes de salvar a venda diária, informe obrigatoriamente se vendeu cada item da meta. Se vendeu, indique a quantidade.</p>
+            <h2>Minhas metas por item</h2>
+            <p class="muted">Veja a meta definida para cada produto, acompanhe o realizado e informe diariamente se vendeu o item.</p>
           </div>
           <span id="repItemGoalStatus" class="role-badge">Carregando…</span>
+        </div>
+        <div class="goal-date-row">
+          <div>
+            <label>Data da informação</label>
+            <input id="saleDate" type="date" required>
+          </div>
+          <button id="saveItemGoalsBtn" class="btn btn-primary" type="button">Salvar informações dos itens</button>
         </div>
         <div id="repItemGoals" class="goal-report-grid"></div>
         <p id="repItemGoalsMsg" class="msg"></p>
       </div>
 
-      <div class="grid grid-2">
-        <div class="card">
-          <h2>Lançar venda diária</h2>
-          <p class="muted">Informe somente o valor total vendido no dia.</p>
-          <form id="saleForm">
-            <label>Data</label>
-            <input id="saleDate" type="date" required>
-            <div class="section-head compact-head">
-              <div>
-                <h3>Vendas por distribuidora</h3>
-                <p class="muted">Informe em qual distribuidora vendeu e o total vendido em cada uma.</p>
-              </div>
-              <button id="addDistributorRowBtn" class="btn btn-light btn-xs" type="button">+ Distribuidora</button>
-            </div>
-            <div id="repDistributorRows" class="distributor-entry-list"></div>
-            <p id="repDistributorMsg" class="msg"></p>
-            <label>Total vendido no dia (R$)</label>
-            <input id="saleAmount" type="number" min="0" step="0.01" readonly value="0.00">
-            <label>Observação opcional</label>
-            <textarea id="saleNote" rows="3"></textarea>
-            <button class="btn btn-primary" type="submit">Salvar venda</button>
-          </form>
-          <p id="saleMsg" class="msg"></p>
-        </div>
-
-        <div class="card">
-          <h2>Últimos lançamentos</h2>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Data</th><th>Valor</th><th>Observação</th></tr></thead>
-              <tbody id="repHistory"></tbody>
-            </table>
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2>Resumo automático das vendas</h2>
+            <p class="muted">Você não precisa mais lançar o total do dia. O sistema soma os pedidos cadastrados e envia automaticamente os totais para o painel gerencial.</p>
           </div>
+          <span class="role-badge">Automático</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Data</th><th>Total dos pedidos</th><th>Origem</th></tr></thead>
+            <tbody id="repHistory"></tbody>
+          </table>
+        </div>
+        <p id="saleMsg" class="msg"></p>
+      </div>
+
+      <div id="repCnpjRankingCard" class="card rank-bottom-card">
+        <div class="section-head">
+          <div>
+            <h2>Ranking por CNPJ</h2>
+            <p class="muted">Clientes ordenados pelo total de pedidos no mês.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>CNPJ</th><th>Razão Social</th><th>Pedidos</th><th>Total</th></tr></thead>
+            <tbody id="repCnpjRankingTable"></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -327,21 +334,6 @@
         </div>
       </div>
 
-      <div id="managerCnpjRankingCard" class="card">
-        <div class="section-head">
-          <div>
-            <h2>Ranking de vendas por CNPJ</h2>
-            <p class="muted">Soma dos pedidos detalhados por cliente no mês selecionado.</p>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>CNPJ</th><th>Razão Social</th><th>Pedidos</th><th>Representantes</th><th>Total vendido</th></tr></thead>
-            <tbody id="managerCnpjRankingTable"></tbody>
-          </table>
-        </div>
-      </div>
-
       <div id="repDistributorBreakdownCard" class="card">
         <div class="section-head">
           <div>
@@ -376,11 +368,15 @@
         <div class="section-head">
           <div>
             <h2>Metas por item</h2>
-            <p class="muted">Administrador e subadministrador podem criar metas de quantidade por produto e acompanhar o realizado.</p>
+            <p class="muted">Crie metas de quantidade individualmente para cada representante, da mesma forma que a meta mensal de vendas.</p>
           </div>
         </div>
         <div class="grid grid-2 item-goal-manager-grid">
           <form id="itemGoalForm" class="form">
+            <label>Representante</label>
+            <select id="goalRep" required>
+              <option value="">Selecione...</option>
+            </select>
             <label>Item / Produto</label>
             <input id="goalItemName" required placeholder="Ex.: NEUROMAX COGNIS">
             <label>Meta de quantidade</label>
@@ -396,7 +392,7 @@
             <h3>Metas ativas e acompanhamento</h3>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Respostas hoje</th><th>Ação</th></tr></thead>
+                <thead><tr><th>Representante</th><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Informou hoje</th><th>Ação</th></tr></thead>
                 <tbody id="itemGoalsTable"></tbody>
               </table>
             </div>
@@ -453,6 +449,21 @@
               <tbody id="inviteList"></tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div id="managerCnpjRankingCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Ranking de vendas por CNPJ</h2>
+            <p class="muted">Soma dos pedidos detalhados por cliente no mês selecionado.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>CNPJ</th><th>Razão Social</th><th>Pedidos</th><th>Representantes</th><th>Total vendido</th></tr></thead>
+            <tbody id="managerCnpjRankingTable"></tbody>
+          </table>
         </div>
       </div>
     </section>
