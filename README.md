@@ -293,3 +293,13 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - A contagem fica separada para cada produto.
 - Adicionados botões **Exportar CSV** e **Exportar PDF** na área de pedidos.
 - Os arquivos exportados incluem Data, CNPJ, Razão Social, Distribuidora, Número do Pedido, Valor e total geral.
+
+
+## Evolução v5.1 — Convites corrigidos + cidade/estado dos clientes
+
+- Corrigida a política RLS de `representative_invites`.
+- Administrador Geral pode criar convites de Representante e Subadministrador.
+- Subadministrador pode criar apenas convites de Representante.
+- Incluídos Cidade e Estado no acompanhamento de pedidos.
+- Cidade e Estado ficam salvos no cadastro do cliente e são autopreenchidos nos próximos pedidos.
+- Cidade e Estado aparecem na listagem dos pedidos e nas exportações CSV/PDF.

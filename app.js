@@ -88,7 +88,12 @@ async function boot(){
     const isMainAdmin=profile.role==="admin";
     $("#managerRoleBadge").textContent=isMainAdmin?"Administrador principal":"Subadministrador";
     $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
-    $("#adminInviteCard")?.classList.toggle("hidden",!isMainAdmin);
+    $("#adminInviteCard")?.classList.remove("hidden");
+    if($("#inviteRole")){
+      $("#inviteRole").innerHTML=isMainAdmin
+        ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option>'
+        : '<option value="rep">Representante</option>';
+    }
     $("#subAdminInfo")?.classList.toggle("hidden",isMainAdmin);
     $("#userManagementCard")?.classList.remove("hidden");
     $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
@@ -186,10 +191,12 @@ async function loadRepOrders(){
     <td>${o.order_date.split("-").reverse().join("/")}</td>
     <td><span class="cnpj-chip">${formatCNPJ(o.cnpj)}</span></td>
     <td>${o.legal_name}</td>
+    <td>${o.city||"—"}</td>
+    <td>${o.state||"—"}</td>
     <td>${distNames[String(o.distributor_id)]||"Distribuidora"}</td>
     <td>${o.order_number}</td>
     <td>${money(o.amount)}</td>
-  </tr>`).join("")||`<tr><td colspan="6">Nenhum pedido registrado neste mês.</td></tr>`;
+  </tr>`).join("")||`<tr><td colspan="8">Nenhum pedido registrado neste mês.</td></tr>`;
 
   renderRepCnpjRanking();
 }
@@ -216,12 +223,20 @@ function renderRepCnpjRanking(){
 function autofillCustomerByCnpj(){
   const cnpj=normalizeCNPJ($("#orderCnpj").value);
   const match=repCustomersCache.find(c=>c.cnpj===cnpj);
-  if(match) $("#orderLegalName").value=match.legal_name;
+  if(match){
+    $("#orderLegalName").value=match.legal_name;
+    $("#orderCity").value=match.city||"";
+    $("#orderState").value=match.state||"";
+  }
 }
 function autofillCustomerByName(){
   const name=$("#orderLegalName").value.trim().toLowerCase();
   const match=repCustomersCache.find(c=>String(c.legal_name||"").trim().toLowerCase()===name);
-  if(match) $("#orderCnpj").value=formatCNPJ(match.cnpj);
+  if(match){
+    $("#orderCnpj").value=formatCNPJ(match.cnpj);
+    $("#orderCity").value=match.city||"";
+    $("#orderState").value=match.state||"";
+  }
 }
 
 $("#orderCnpj")?.addEventListener("input",()=>{
@@ -238,6 +253,8 @@ $("#orderForm")?.addEventListener("submit",async e=>{
 
   const cnpj=normalizeCNPJ($("#orderCnpj").value);
   const legal_name=$("#orderLegalName").value.trim();
+  const city=$("#orderCity").value.trim();
+  const state=$("#orderState").value.trim().toUpperCase();
   const amount=Number($("#orderAmount").value||0);
   const order_number=$("#orderNumber").value.trim();
   const distributor_id=Number($("#orderDistributor").value||0);
@@ -245,12 +262,14 @@ $("#orderForm")?.addEventListener("submit",async e=>{
 
   if(cnpj.length!==14)return setMsg($("#orderMsg"),"Informe um CNPJ válido com 14 dígitos.");
   if(!legal_name)return setMsg($("#orderMsg"),"Informe a razão social.");
+  if(!city)return setMsg($("#orderMsg"),"Informe a cidade do cliente.");
+  if(!state)return setMsg($("#orderMsg"),"Informe o estado do cliente.");
   if(!distributor_id)return setMsg($("#orderMsg"),"Selecione a distribuidora.");
   if(amount<=0)return setMsg($("#orderMsg"),"Informe um valor de pedido maior que zero.");
   if(!order_number)return setMsg($("#orderMsg"),"Informe o número do pedido.");
 
   const {data:customer,error:cErr}=await sb.from("customers")
-    .upsert({user_id:user.id,cnpj,legal_name},{onConflict:"user_id,cnpj"})
+    .upsert({user_id:user.id,cnpj,legal_name,city,state},{onConflict:"user_id,cnpj"})
     .select().single();
   if(cErr)return setMsg($("#orderMsg"),cErr.message);
 
@@ -261,6 +280,8 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     order_date,
     cnpj,
     legal_name,
+    city,
+    state,
     order_number,
     amount
   });
@@ -279,6 +300,8 @@ function repOrderExportRows(){
     Data:o.order_date.split("-").reverse().join("/"),
     CNPJ:formatCNPJ(o.cnpj),
     "Razão Social":o.legal_name,
+    Cidade:o.city||"",
+    Estado:o.state||"",
     Distribuidora:repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora",
     "Número do Pedido":o.order_number,
     Valor:Number(o.amount||0)
@@ -293,17 +316,17 @@ function escapeCsvCell(value){
 $("#repExportCsvBtn")?.addEventListener("click",()=>{
   const rows=repOrderExportRows();
   if(!rows.length)return alert("Não há pedidos no mês para exportar.");
-  const headers=["Data","CNPJ","Razão Social","Distribuidora","Número do Pedido","Valor"];
+  const headers=["Data","CNPJ","Razão Social","Cidade","Estado","Distribuidora","Número do Pedido","Valor"];
   const lines=[
     headers.map(escapeCsvCell).join(";"),
     ...rows.map(r=>[
-      r.Data,r.CNPJ,r["Razão Social"],r.Distribuidora,r["Número do Pedido"],
+      r.Data,r.CNPJ,r["Razão Social"],r.Cidade,r.Estado,r.Distribuidora,r["Número do Pedido"],
       Number(r.Valor||0).toFixed(2).replace(".",",")
     ].map(escapeCsvCell).join(";"))
   ];
   const total=rows.reduce((s,r)=>s+Number(r.Valor||0),0);
   lines.push("");
-  lines.push(`${escapeCsvCell("TOTAL")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell(total.toFixed(2).replace(".",","))}`);
+  lines.push(`${escapeCsvCell("TOTAL")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell("")};${escapeCsvCell(total.toFixed(2).replace(".",","))}`);
   const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8;"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=url;
@@ -319,8 +342,8 @@ $("#repExportPdfBtn")?.addEventListener("click",()=>{
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Minhas vendas</title>
   <style>body{font-family:Arial;padding:28px;color:#222}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#eef7f1}.total{margin-top:16px;font-size:18px;font-weight:bold}</style>
   </head><body><h1>Minhas vendas — ${profile?.name||"Representante"}</h1><p>Período: ${monthNow()}</p>
-  <table><thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
-  <tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Distribuidora}</td><td>${r["Número do Pedido"]}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
+  <table><thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Cidade||"—"}</td><td>${r.Estado||"—"}</td><td>${r.Distribuidora}</td><td>${r["Número do Pedido"]}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
   <div class="total">Total: ${money(total)}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 });
@@ -1030,8 +1053,8 @@ $("#inviteRole")?.addEventListener("change",()=>{
 
 $("#inviteForm").addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#inviteMsg"),"");
-  if(profile?.role!=="admin") return setMsg($("#inviteMsg"),"Apenas o administrador principal pode gerar acessos.");
-  const role=$("#inviteRole")?.value||"rep";
+  if(!["admin","sub_admin"].includes(profile?.role)) return setMsg($("#inviteMsg"),"Você não possui permissão para gerar acessos.");
+  const role=profile?.role==="sub_admin"?"rep":($("#inviteRole")?.value||"rep");
   const row={
     representative_name:$("#inviteName").value.trim(),
     monthly_target:role==="rep"?Number($("#inviteTarget").value||0):0,
