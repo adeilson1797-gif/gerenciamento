@@ -161,3 +161,247 @@ th,td{padding:12px 13px}
 @media(max-width:900px){
   .chart-box-tall{height:300px}
 }
+
+
+/* =========================================================
+   v5.7 — RESPONSIVIDADE MOBILE / DESKTOP
+   No desktop mantém o menu lateral.
+   No celular o menu do representante vira uma barra inferior.
+   ========================================================= */
+
+/* Melhor uso de telas grandes */
+@media (min-width: 1200px){
+  .container{max-width:1600px;padding-left:24px;padding-right:24px}
+  .rep-app-shell{grid-template-columns:245px minmax(0,1fr);gap:24px}
+}
+
+/* Tablet e celular */
+@media (max-width: 760px){
+  html,body{max-width:100%;overflow-x:hidden}
+  body{padding-bottom:82px}
+
+  .topbar{
+    min-height:58px;
+    padding:9px 12px;
+    position:sticky;
+    top:0;
+    z-index:70;
+  }
+  .brand{gap:8px;min-width:0}
+  .brand-mark{width:36px;height:36px;border-radius:10px;font-size:13px;flex:0 0 auto}
+  .brand strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+  .brand small{display:none}
+  .top-actions{gap:6px;flex:0 0 auto}
+  .top-actions #sessionName{display:none}
+  .top-actions .btn{padding:8px 10px;font-size:12px}
+
+  .container{
+    width:100%;
+    max-width:100%;
+    margin:0;
+    padding:14px 10px 26px;
+  }
+
+  /* O menu deixa de ocupar espaço na lateral */
+  .rep-app-shell{
+    display:block;
+    width:100%;
+    min-width:0;
+  }
+  .rep-main-content{
+    width:100%;
+    min-width:0;
+  }
+
+  /* Barra de navegação fixa inferior */
+  .rep-side-nav{
+    position:fixed !important;
+    left:8px;
+    right:8px;
+    bottom:8px;
+    top:auto !important;
+    z-index:100;
+    display:grid !important;
+    grid-template-columns:1fr 1fr;
+    gap:7px;
+    padding:7px;
+    margin:0;
+    border-radius:16px;
+    background:rgba(255,255,255,.97);
+    box-shadow:0 8px 30px rgba(0,0,0,.20);
+    border:1px solid var(--line);
+    overflow:visible;
+    backdrop-filter:blur(10px);
+  }
+  .rep-side-title{display:none !important}
+  .rep-nav-btn{
+    min-width:0 !important;
+    width:100% !important;
+    margin:0;
+    padding:10px 6px;
+    text-align:center;
+    border-radius:11px;
+    font-size:12px;
+    line-height:1.2;
+    white-space:normal;
+  }
+  .rep-nav-btn.active{
+    box-shadow:inset 0 0 0 1px rgba(11,107,58,.08);
+  }
+
+  .hero,.hero.split{
+    display:block;
+    margin-bottom:12px;
+  }
+  .hero h1{
+    font-size:21px;
+    line-height:1.15;
+    margin-top:4px;
+    word-break:break-word;
+  }
+  .eyebrow{font-size:10px}
+  .hero .action-row{
+    margin-top:10px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    width:100%;
+  }
+  .hero .action-row .btn{width:100%}
+
+  /* Indicadores em 2 colunas para aproveitar melhor a tela */
+  .grid-4{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:9px;
+    margin-bottom:12px;
+  }
+  .grid-3,.grid-2{
+    grid-template-columns:1fr !important;
+    gap:10px;
+  }
+
+  .kpi{
+    padding:12px;
+    border-radius:13px;
+    min-width:0;
+  }
+  .kpi span{font-size:10px;margin-bottom:4px}
+  .kpi strong{
+    font-size:18px;
+    line-height:1.15;
+    overflow-wrap:anywhere;
+  }
+  .kpi small{font-size:9px}
+
+  .card{
+    padding:13px;
+    margin-bottom:12px;
+    border-radius:14px;
+  }
+  h2{font-size:17px}
+  h3{font-size:15px}
+
+  .section-head{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:8px;
+  }
+  .section-head .action-row,
+  .filter-row{
+    width:100%;
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .section-head .action-row .btn,
+  .filter-row .btn{
+    flex:1 1 auto;
+  }
+
+  .month-filter{width:100%;min-width:0}
+  .month-filter input,.month-filter select{width:100%}
+
+  /* Formulários confortáveis para toque */
+  input,textarea,select{
+    font-size:16px; /* evita zoom automático no iPhone */
+    min-height:44px;
+  }
+  label{margin-top:10px}
+  .form .grid,.goal-create-form{
+    grid-template-columns:1fr !important;
+  }
+
+  /* Tabelas continuam completas, mas rolam somente dentro do cartão */
+  .table-wrap{
+    width:100%;
+    max-width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    border:1px solid #edf1ee;
+  }
+  .table-wrap table{
+    width:max-content;
+    min-width:100%;
+  }
+  th,td{
+    padding:9px 10px;
+    font-size:12px;
+  }
+  th:first-child,td:first-child{
+    position:sticky;
+    left:0;
+    z-index:2;
+    background:#fff;
+  }
+  th:first-child{
+    background:#f5f8f6;
+    z-index:3;
+  }
+
+  .progress-card{padding:13px}
+  .progress-head,.progress-foot{
+    gap:6px;
+    align-items:flex-start;
+  }
+
+  .chart-box,.chart-box-tall{
+    height:280px;
+    min-height:280px;
+  }
+
+  .client-counter-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+  .client-counter-grid .kpi strong{font-size:19px}
+
+  .data-conflict-inline{
+    align-items:flex-start;
+    padding:10px;
+  }
+  .data-conflict-inline span{min-width:0;width:100%}
+
+  .app-footer{
+    width:100%;
+    max-width:100%;
+    padding:12px 10px 96px;
+    text-align:center;
+    display:block;
+  }
+  .app-footer span,.app-footer strong{display:block;margin:3px 0}
+}
+
+/* Celulares muito estreitos */
+@media (max-width: 390px){
+  .brand strong{max-width:145px}
+  .container{padding-left:8px;padding-right:8px}
+  .grid-4{gap:7px}
+  .kpi{padding:10px}
+  .kpi strong{font-size:16px}
+  .card{padding:11px}
+  .rep-side-nav{left:6px;right:6px;bottom:6px}
+  .rep-nav-btn{font-size:11px;padding:9px 4px}
+}
+
+/* Quando o aparelho está deitado, preserva conteúdo e menu inferior compacto */
+@media (max-width: 900px) and (orientation:landscape){
+  body{padding-bottom:74px}
+  .rep-side-nav{left:20%;right:20%;bottom:6px}
+  .grid-4{grid-template-columns:repeat(4,minmax(0,1fr)) !important}
+}

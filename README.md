@@ -439,3 +439,17 @@ As alterações abaixo são aplicadas somente quando o usuário logado possui o 
 - Formulários de criação/edição e gestão de usuários/distribuidoras.
 
 Os outros perfis (Administrador Geral, Sub ADM e Gerente Regional) mantêm o painel e os recursos já existentes.
+
+
+## v5.7 — Layout responsivo para celular e computador
+
+- No computador o menu do Representante continua lateral.
+- Em telas de celular/tablet, o menu **Acompanhamento de vendas / Base Clientes** passa para uma barra fixa inferior, deixando toda a largura disponível para o conteúdo.
+- Cabeçalho compacto no celular.
+- KPIs em duas colunas no mobile.
+- Cards, formulários e botões ajustados para toque.
+- Campos usam tamanho de fonte adequado para evitar zoom automático em navegadores móveis.
+- Tabelas mantêm todas as colunas e passam a rolar horizontalmente dentro do próprio card, sem alargar o site.
+- Primeira coluna das tabelas fica fixa durante a rolagem horizontal.
+- Gráficos recebem altura adequada no mobile.
+- Em telas grandes, a área útil continua ampla.
