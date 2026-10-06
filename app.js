@@ -14,10 +14,10 @@ function formatCNPJ(value){
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12,14)}`;
 }
 
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, dailyChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, clientBaseCache=[], dailyChart=null;
 
 function showOnly(id){
-  ["#authView","#resetView","#repView","#adminView"].forEach(x=>{
+  ["#authView","#resetView","#forcePasswordView","#repView","#adminView"].forEach(x=>{
     const el=$(x);
     if(el) el.classList.add("hidden");
   });
@@ -82,27 +82,37 @@ async function boot(){
   user=session.user; await loadProfile(); await tryPendingInvite();
   if(!profile){showOnly("#authView");$("#sessionName").textContent=user.email||"";$("#logoutBtn").classList.remove("hidden");return;}
   $("#sessionName").textContent=profile.name;$("#logoutBtn").classList.remove("hidden");
-  if(["admin","sub_admin"].includes(profile.role)){
+  if(profile.must_change_password){
+    showOnly("#forcePasswordView");
+    return;
+  }
+  if(["admin","sub_admin","regional_manager"].includes(profile.role)){
     showOnly("#adminView");
     $("#adminMonth").value=$("#adminMonth").value||monthNow();
     const isMainAdmin=profile.role==="admin";
-    $("#managerRoleBadge").textContent=isMainAdmin?"Administrador principal":"Subadministrador";
+    const isSubAdmin=profile.role==="sub_admin";
+    const isRegional=profile.role==="regional_manager";
+    $("#managerRoleBadge").textContent=isMainAdmin?"Administrador principal":isSubAdmin?"Subadministrador":`Gerente Regional — ${(profile.managed_states||[]).join(", ")||"sem região definida"}`;
     $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
-    $("#adminInviteCard")?.classList.remove("hidden");
+    $("#managerRoleBadge").classList.toggle("regional-badge",isRegional);
+    $("#adminInviteCard")?.classList.toggle("hidden",isRegional);
     if($("#inviteRole")){
       $("#inviteRole").innerHTML=isMainAdmin
-        ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option>'
+        ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option><option value="regional_manager">Gerente Regional</option>'
         : '<option value="rep">Representante</option>';
+      updateInviteRoleFields();
     }
-    $("#subAdminInfo")?.classList.toggle("hidden",isMainAdmin);
-    $("#userManagementCard")?.classList.remove("hidden");
+    $("#userManagementCard")?.classList.toggle("hidden",isRegional);
     $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
-    $("#userManagementHint").textContent=isMainAdmin
-      ?"Administrador Geral: altere acesso, cargo/função, meta, status e nome dos usuários."
-      :"Subadministrador: defina cargo/função e meta mensal dos cadastrados. Perfis de acesso e status ficam reservados ao Administrador Geral.";
+    $("#itemGoalCreateCard")?.classList.toggle("hidden",isRegional);
+    $("#distributorManagerCard")?.classList.toggle("hidden",isRegional);
+    if($("#userManagementHint")) $("#userManagementHint").textContent=isMainAdmin
+      ?"Administrador Geral: altere acesso, cargo/função, estado/região, meta, status e senha dos usuários."
+      :"Subadministrador: defina cargo/função e meta mensal dos cadastrados. Perfis de acesso, região, status e senha ficam reservados ao Administrador Geral.";
     await loadAdmin();
   } else {
     showOnly("#repView");
+    setRepTab("sales");
     $("#repTitle").textContent=`${profile.job_title?profile.job_title+" — ":""}${profile.name}`;
     $("#saleDate").value=today();
     await loadRep();
@@ -115,6 +125,20 @@ $("#loginForm").addEventListener("submit",async e=>{
   if(error) return setMsg($("#loginMsg"),"E-mail ou senha inválidos.");
   await boot();
 });
+$("#forcePasswordForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();setMsg($("#forcePasswordMsg"),"");
+  const p1=$("#forceNewPassword").value,p2=$("#forceConfirmPassword").value;
+  if(p1!==p2)return setMsg($("#forcePasswordMsg"),"As senhas não coincidem.");
+  if(p1.length<8)return setMsg($("#forcePasswordMsg"),"Use pelo menos 8 caracteres.");
+  if(p1==="redefinirsenha")return setMsg($("#forcePasswordMsg"),"Escolha uma senha diferente da senha temporária.");
+  const {error}=await sb.auth.updateUser({password:p1});
+  if(error)return setMsg($("#forcePasswordMsg"),error.message);
+  const {error:rpcError}=await sb.rpc("complete_password_change");
+  if(rpcError)return setMsg($("#forcePasswordMsg"),rpcError.message);
+  setMsg($("#forcePasswordMsg"),"Senha alterada com sucesso. Liberando seu acesso...","ok");
+  await loadProfile();setTimeout(()=>boot(),600);
+});
+
 $("#forgotBtn").addEventListener("click",async()=>{
   const email=$("#loginEmail").value.trim(); if(!email)return setMsg($("#loginMsg"),"Digite seu e-mail primeiro.");
   const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
@@ -143,6 +167,199 @@ async function tryPendingInvite(){
   const {error}=await sb.rpc("claim_representative_invite",{p_code:code});
   if(!error)localStorage.removeItem("pending_invite_code");await loadProfile();
 }
+
+
+function setRepTab(tab){
+  const sales=tab==="sales";
+  $("#repSalesTab")?.classList.toggle("hidden",!sales);
+  $("#repClientBaseTab")?.classList.toggle("hidden",sales);
+  $("#repNavSales")?.classList.toggle("active",sales);
+  $("#repNavClients")?.classList.toggle("active",!sales);
+  if(!sales) loadClientBase();
+}
+
+$("#repNavSales")?.addEventListener("click",()=>setRepTab("sales"));
+$("#repNavClients")?.addEventListener("click",()=>setRepTab("clients"));
+
+function resetClientBaseForm(){
+  $("#clientBaseEditId").value="";
+  $("#clientBaseCnpj").value="";
+  $("#clientBaseLegalName").value="";
+  $("#clientBaseDefinition").value="independente";
+  $("#clientBaseBuyer").value="";
+  $("#clientBasePhone").value="";
+  $("#clientBaseNetworkName").value="";
+  $("#clientBaseUnitType").value="matriz";
+  $("#clientBaseParentMatrix").value="";
+  $("#clientBaseCancelEdit").classList.add("hidden");
+  updateClientBaseDefinitionUI();
+  setMsg($("#clientBaseMsg"),"");
+}
+
+function updateClientBaseDefinitionUI(){
+  const isNetwork=$("#clientBaseDefinition").value==="rede";
+  $("#clientBaseNetworkWrap").classList.toggle("hidden",!isNetwork);
+  $("#clientBaseNetworkDetails").classList.toggle("hidden",!isNetwork);
+
+  if(!isNetwork){
+    $("#clientBaseNetworkName").value="";
+    $("#clientBaseUnitType").value="matriz";
+    $("#clientBaseParentMatrix").value="";
+    $("#clientBaseMatrixWrap").classList.add("hidden");
+    return;
+  }
+
+  const isBranch=$("#clientBaseUnitType").value==="filial";
+  $("#clientBaseMatrixWrap").classList.toggle("hidden",!isBranch);
+  if(!isBranch) $("#clientBaseParentMatrix").value="";
+}
+
+$("#clientBaseDefinition")?.addEventListener("change",updateClientBaseDefinitionUI);
+$("#clientBaseUnitType")?.addEventListener("change",updateClientBaseDefinitionUI);
+$("#clientBaseCancelEdit")?.addEventListener("click",resetClientBaseForm);
+
+async function loadClientBase(){
+  if(!user || profile?.role!=="rep") return;
+  setMsg($("#clientBaseMsg"),"");
+
+  const {data,error}=await sb.from("client_base")
+    .select("*")
+    .eq("user_id",user.id)
+    .order("legal_name");
+
+  if(error){
+    setMsg($("#clientBaseMsg"),error.message);
+    return;
+  }
+
+  clientBaseCache=data||[];
+
+  const independent=clientBaseCache.filter(c=>c.definition==="independente").length;
+  const matrices=clientBaseCache.filter(c=>c.definition==="rede"&&c.unit_type==="matriz").length;
+  const branches=clientBaseCache.filter(c=>c.definition==="rede"&&c.unit_type==="filial").length;
+  const valid=independent+matrices;
+  const all=independent+matrices+branches;
+
+  $("#clientBaseCountValid").textContent=valid;
+  $("#clientBaseCountAll").textContent=all;
+  $("#clientBaseCountMatrices").textContent=matrices;
+  $("#clientBaseCountBranches").textContent=branches;
+
+  const matrixRows=clientBaseCache.filter(c=>c.definition==="rede"&&c.unit_type==="matriz");
+  $("#clientBaseParentMatrix").innerHTML='<option value="">Selecione a matriz...</option>'+matrixRows.map(c=>`<option value="${c.id}">${c.legal_name} — ${formatCNPJ(c.cnpj)}</option>`).join("");
+
+  const byId=Object.fromEntries(clientBaseCache.map(c=>[String(c.id),c]));
+
+  $("#clientBaseTable").innerHTML=clientBaseCache.map(c=>{
+    let definitionLabel=c.definition==="independente"?"Independente":"Rede";
+    let unitLabel="—", cls="independent";
+    if(c.definition==="rede"&&c.unit_type==="matriz"){unitLabel="Matriz";cls="";}
+    if(c.definition==="rede"&&c.unit_type==="filial"){unitLabel="Filial";cls="branch";}
+    const matrixName=c.parent_matrix_id?(byId[String(c.parent_matrix_id)]?.legal_name||"Matriz"):"—";
+    return `<tr>
+      <td><span class="cnpj-chip">${formatCNPJ(c.cnpj)}</span></td>
+      <td><strong>${c.legal_name}</strong></td>
+      <td>${definitionLabel}</td>
+      <td><span class="client-type-pill ${cls}">${unitLabel}</span></td>
+      <td>${matrixName}</td>
+      <td>${c.buyer_name||"—"}</td>
+      <td>${c.phone||"—"}</td>
+      <td>${c.network_name||"—"}</td>
+      <td>
+        <button class="btn btn-xs btn-light" onclick="editClientBase(${c.id})">Editar</button>
+        <button class="btn btn-xs btn-light danger" onclick="deleteClientBase(${c.id},'${String(c.legal_name||"").replaceAll("'","&#39;")}')">Excluir</button>
+      </td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="9">Nenhum cliente cadastrado na base.</td></tr>`;
+}
+
+window.editClientBase=(id)=>{
+  const c=clientBaseCache.find(x=>Number(x.id)===Number(id));
+  if(!c) return;
+
+  $("#clientBaseEditId").value=c.id;
+  $("#clientBaseCnpj").value=formatCNPJ(c.cnpj);
+  $("#clientBaseLegalName").value=c.legal_name||"";
+  $("#clientBaseDefinition").value=c.definition||"independente";
+  $("#clientBaseBuyer").value=c.buyer_name||"";
+  $("#clientBasePhone").value=c.phone||"";
+  $("#clientBaseNetworkName").value=c.network_name||"";
+  $("#clientBaseUnitType").value=c.unit_type||"matriz";
+  updateClientBaseDefinitionUI();
+  $("#clientBaseParentMatrix").value=c.parent_matrix_id||"";
+  $("#clientBaseCancelEdit").classList.remove("hidden");
+  $("#clientBaseForm").scrollIntoView({behavior:"smooth",block:"start"});
+};
+
+window.deleteClientBase=async(id,name)=>{
+  if(!confirm(`Excluir "${name}" da Base Clientes?`)) return;
+  const {error}=await sb.from("client_base").delete().eq("id",id).eq("user_id",user.id);
+  if(error){
+    alert(error.message);
+    return;
+  }
+  await loadClientBase();
+};
+
+$("#clientBaseCnpj")?.addEventListener("input",()=>{
+  const d=normalizeCNPJ($("#clientBaseCnpj").value);
+  $("#clientBaseCnpj").value=d.length===14?formatCNPJ(d):d;
+});
+
+$("#clientBaseForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  setMsg($("#clientBaseMsg"),"");
+
+  const editId=Number($("#clientBaseEditId").value||0);
+  const cnpj=normalizeCNPJ($("#clientBaseCnpj").value);
+  const legal_name=$("#clientBaseLegalName").value.trim();
+  const definition=$("#clientBaseDefinition").value;
+  const buyer_name=$("#clientBaseBuyer").value.trim()||null;
+  const phone=$("#clientBasePhone").value.trim()||null;
+
+  if(cnpj.length!==14)return setMsg($("#clientBaseMsg"),"Informe um CNPJ válido com 14 dígitos.");
+  if(!legal_name)return setMsg($("#clientBaseMsg"),"Informe a razão social.");
+
+  let unit_type=null, network_name=null, parent_matrix_id=null;
+
+  if(definition==="rede"){
+    network_name=$("#clientBaseNetworkName").value.trim();
+    unit_type=$("#clientBaseUnitType").value;
+    if(!network_name)return setMsg($("#clientBaseMsg"),"Informe o nome da rede.");
+
+    if(unit_type==="filial"){
+      parent_matrix_id=Number($("#clientBaseParentMatrix").value||0);
+      if(!parent_matrix_id)return setMsg($("#clientBaseMsg"),"Selecione a matriz desta filial.");
+      if(editId && parent_matrix_id===editId)return setMsg($("#clientBaseMsg"),"Uma unidade não pode ser matriz dela mesma.");
+    }
+  }
+
+  const row={
+    user_id:user.id,
+    cnpj,
+    legal_name,
+    definition,
+    unit_type,
+    buyer_name,
+    phone,
+    network_name,
+    parent_matrix_id,
+    active:true
+  };
+
+  let result;
+  if(editId){
+    result=await sb.from("client_base").update(row).eq("id",editId).eq("user_id",user.id);
+  }else{
+    result=await sb.from("client_base").insert(row);
+  }
+
+  if(result.error)return setMsg($("#clientBaseMsg"),result.error.message);
+
+  setMsg($("#clientBaseMsg"),editId?"Cliente atualizado com sucesso.":"Cliente cadastrado com sucesso.","ok");
+  resetClientBaseForm();
+  await loadClientBase();
+});
 
 async function loadRep(){
   const mk=monthNow(),{start,next}=monthBounds(mk);
@@ -596,7 +813,7 @@ async function loadAdmin(){
   ]=await Promise.all([
     sb.from("profiles").select("*").order("name"),
     sb.from("daily_sales").select("*").gte("sale_date",start).lt("sale_date",next),
-    sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
+    profile.role==="regional_manager" ? Promise.resolve({data:[],error:null}) : sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
     sb.from("item_goals").select("*").order("created_at",{ascending:false}),
     sb.from("item_goal_reports").select("*").gte("report_date",start).lt("report_date",next),
     sb.from("distributors").select("*").order("name"),
@@ -673,7 +890,7 @@ async function loadAdmin(){
 
   $("#inviteList").innerHTML=(invites||[]).map(i=>`<tr>
     <td>${i.representative_name}</td>
-    <td>${i.invite_role==="sub_admin"?"Subadministrador":"Representante"}</td>
+    <td>${i.invite_role==="sub_admin"?"Subadministrador":i.invite_role==="regional_manager"?"Gerente Regional":"Representante"}</td>
     <td>${i.code.slice(0,10)}…</td>
     <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
   </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
@@ -691,7 +908,7 @@ async function loadAdmin(){
 
 
 function roleLabel(role){
-  return role==="admin"?"Administrador Geral":role==="sub_admin"?"Subadministrador":"Representante";
+  return role==="admin"?"Administrador Geral":role==="sub_admin"?"Subadministrador":role==="regional_manager"?"Gerente Regional":"Representante";
 }
 
 function renderUserManagement(){
@@ -705,33 +922,30 @@ function renderUserManagement(){
   const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id && p.role!=="admin");
 
   $("#userManagementTable").innerHTML=rows.map(p=>`<tr>
-    <td>
-      ${isMainAdmin
-        ? `<input class="inline-edit user-name" data-id="${p.user_id}" value="${String(p.name||"").replaceAll('"','&quot;')}">`
-        : `<strong>${p.name}</strong>`}
-    </td>
-    <td>
-      <input class="inline-edit user-title" data-id="${p.user_id}" value="${String(p.job_title||"").replaceAll('"','&quot;')}" placeholder="Ex.: Especialista, Supervisor">
-    </td>
-    <td>
-      ${isMainAdmin
-        ? `<select class="inline-edit role-select user-role" data-id="${p.user_id}">
-            <option value="rep" ${p.role==="rep"?"selected":""}>Usuário / Especialista</option>
-            <option value="sub_admin" ${p.role==="sub_admin"?"selected":""}>Subadministrador</option>
-           </select>`
-        : `<strong>${p.role==="sub_admin"?"Subadministrador":"Usuário / Especialista"}</strong><span class="restricted-note">Somente o Administrador Geral altera o perfil de acesso.</span>`}
-    </td>
-    <td>
-      <input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}">
-    </td>
-    <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span></td>
+    <td>${isMainAdmin?`<input class="inline-edit user-name" data-id="${p.user_id}" value="${String(p.name||"").replaceAll('"','&quot;')}">`:`<strong>${p.name}</strong>`}</td>
+    <td><input class="inline-edit user-title" data-id="${p.user_id}" value="${String(p.job_title||"").replaceAll('"','&quot;')}" placeholder="Ex.: Especialista, Supervisor"></td>
+    <td>${isMainAdmin
+      ? `<select class="inline-edit role-select user-role" data-id="${p.user_id}">
+          <option value="rep" ${p.role==="rep"?"selected":""}>Usuário / Especialista</option>
+          <option value="regional_manager" ${p.role==="regional_manager"?"selected":""}>Gerente Regional</option>
+          <option value="sub_admin" ${p.role==="sub_admin"?"selected":""}>Subadministrador</option>
+         </select>`
+      : `<strong>${roleLabel(p.role)}</strong><span class="restricted-note">Somente o Administrador Geral altera o perfil de acesso.</span>`}</td>
+    <td>${isMainAdmin
+      ? `<div class="region-field-stack">
+          <input class="inline-edit user-state" data-id="${p.user_id}" maxlength="2" value="${String(p.state_code||"").replaceAll('"','&quot;')}" placeholder="Estado do representante: PB">
+          <input class="inline-edit user-managed-states" data-id="${p.user_id}" value="${String((p.managed_states||[]).join(', ')).replaceAll('"','&quot;')}" placeholder="Regiões do gerente: PB, CE">
+          <small>Use Estado para representante e Regiões para Gerente Regional.</small>
+         </div>`
+      : `<span>${p.role==="regional_manager"?(p.managed_states||[]).join(", "):(p.state_code||"—")}</span>`}</td>
+    <td><input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}"></td>
+    <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span>${p.must_change_password?'<span class="force-password-note">Troca de senha pendente</span>':''}</td>
+    <td>${isMainAdmin?`<button class="btn btn-xs btn-light" onclick="resetUserPassword('${p.user_id}','${String(p.name||"").replaceAll("'","&#39;")}')">Resetar senha</button>`:'—'}</td>
     <td>
       <button class="btn btn-xs btn-primary" onclick="saveUserManagement('${p.user_id}',${p.active})">Salvar</button>
-      ${isMainAdmin
-        ? `<button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button>`
-        : ""}
+      ${isMainAdmin?`<button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button>`:""}
     </td>
-  </tr>`).join("")||`<tr><td colspan="6">Nenhum outro usuário cadastrado.</td></tr>`;
+  </tr>`).join("")||`<tr><td colspan="8">Nenhum outro usuário cadastrado.</td></tr>`;
 }
 
 window.saveUserManagement=async(userId)=>{
@@ -753,11 +967,15 @@ window.saveUserManagement=async(userId)=>{
 
   const name=document.querySelector(`.user-name[data-id="${userId}"]`)?.value.trim();
   const role=document.querySelector(`.user-role[data-id="${userId}"]`)?.value||"rep";
+  const state_code=(document.querySelector(`.user-state[data-id="${userId}"]`)?.value||"").trim().toUpperCase()||null;
+  const managed_states=[...new Set((document.querySelector(`.user-managed-states[data-id="${userId}"]`)?.value||"").split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))];
   const {error}=await sb.from("profiles").update({
     name,
     job_title,
     role,
-    monthly_target
+    monthly_target,
+    state_code:role==="rep"?state_code:null,
+    managed_states:role==="regional_manager"?managed_states:[]
   }).eq("user_id",userId);
   if(error)return setMsg($("#userManagementMsg"),error.message);
   setMsg($("#userManagementMsg"),"Usuário atualizado com sucesso.","ok");
@@ -771,6 +989,17 @@ window.toggleUserActive=async(userId,isActive)=>{
   setMsg($("#userManagementMsg"),!isActive?"Usuário ativado.":"Usuário desativado.","ok");
   await loadAdmin();
 };
+
+window.resetUserPassword=async(userId,name)=>{
+  if(profile?.role!=="admin") return;
+  if(!confirm(`Resetar a senha de ${name}? A senha temporária será "redefinirsenha" e o usuário será obrigado a criar outra senha no próximo acesso.`)) return;
+  setMsg($("#userManagementMsg"),"Resetando senha...","ok");
+  const {data,error}=await sb.functions.invoke("admin-reset-password",{body:{target_user_id:userId}});
+  if(error || data?.error)return setMsg($("#userManagementMsg"),data?.error||error?.message||"Não foi possível resetar a senha.");
+  setMsg($("#userManagementMsg"),`Senha de ${name} redefinida. Senha temporária: redefinirsenha. No próximo login a troca será obrigatória.`,"ok");
+  await loadAdmin();
+};
+
 
 
 
@@ -980,7 +1209,7 @@ function renderItemGoalsManager(){
       <td>${soldQty}</td>
       <td>${(pct*100).toFixed(1)}%<div class="progress-mini"><i style="width:${Math.min(pct*100,100)}%"></i></div></td>
       <td>${answeredToday?"Sim":"Pendente"}</td>
-      <td><button class="btn btn-xs btn-light" onclick="toggleItemGoal(${g.id},${g.active})">${g.active?"Encerrar":"Reativar"}</button></td>
+      <td>${["admin","sub_admin"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="toggleItemGoal(${g.id},${g.active})">${g.active?"Encerrar":"Reativar"}</button>`:'<span class="muted">Consulta</span>'}</td>
     </tr>`;
   }).join("")||`<tr><td colspan="8">Nenhuma meta individual por item criada.</td></tr>`;
 }
@@ -1045,20 +1274,29 @@ $("#exportBtn").addEventListener("click",()=>{
   a.href=url;a.download=`vendas-${adminCache.month}.csv`;a.click();URL.revokeObjectURL(url);
 });
 
-$("#inviteRole")?.addEventListener("change",()=>{
-  const isRep=$("#inviteRole").value==="rep";
+function updateInviteRoleFields(){
+  const role=$("#inviteRole")?.value||"rep";
+  const isRep=role==="rep",isRegional=role==="regional_manager";
   $("#inviteTargetWrap")?.classList.toggle("hidden",!isRep);
+  $("#inviteStateWrap")?.classList.toggle("hidden",!isRep);
+  $("#inviteManagedStatesWrap")?.classList.toggle("hidden",!isRegional);
   if(!isRep) $("#inviteTarget").value="0";
-});
+}
+$("#inviteRole")?.addEventListener("change",updateInviteRoleFields);
 
 $("#inviteForm").addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#inviteMsg"),"");
   if(!["admin","sub_admin"].includes(profile?.role)) return setMsg($("#inviteMsg"),"Você não possui permissão para gerar acessos.");
   const role=profile?.role==="sub_admin"?"rep":($("#inviteRole")?.value||"rep");
+  const state_code=role==="rep"?($("#inviteState").value.trim().toUpperCase()||null):null;
+  const managed_states=role==="regional_manager"?[...new Set($("#inviteManagedStates").value.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))]:[];
+  if(role==="regional_manager"&&!managed_states.length)return setMsg($("#inviteMsg"),"Informe pelo menos um estado para o Gerente Regional.");
   const row={
     representative_name:$("#inviteName").value.trim(),
     monthly_target:role==="rep"?Number($("#inviteTarget").value||0):0,
-    invite_role:role
+    invite_role:role,
+    state_code,
+    managed_states
   };
   const {data,error}=await sb.from("representative_invites").insert(row).select().single();
   if(error)return setMsg($("#inviteMsg"),error.message);
@@ -1066,12 +1304,14 @@ $("#inviteForm").addEventListener("submit",async e=>{
   $("#inviteResult").classList.remove("hidden");
   setMsg($("#inviteMsg"),role==="sub_admin"
     ?"Convite de subadministrador criado. Envie o código para o segundo gestor."
-    :"Convite de representante criado. Envie o código ao representante.","ok");
+    :role==="regional_manager"
+      ?"Convite de Gerente Regional criado. Envie o código ao gerente."
+      :"Convite de representante criado. Envie o código ao representante.","ok");
   await loadAdmin();
 });
 $("#copyCodeBtn").addEventListener("click",async()=>{await navigator.clipboard.writeText($("#generatedCode").textContent);$("#copyCodeBtn").textContent="Copiado!";setTimeout(()=>$("#copyCodeBtn").textContent="Copiar código",1300);});
 
-$("#resetPasswordForm")?.addEventListener("submit",async e=>{e.preventDefault();const p1=$("#newPassword").value,p2=$("#confirmNewPassword").value;if(p1!==p2)return setMsg($("#resetPasswordMsg"),"As senhas não coincidem.");const {error}=await sb.auth.updateUser({password:p1});if(error)return setMsg($("#resetPasswordMsg"),error.message);setMsg($("#resetPasswordMsg"),"Senha atualizada com sucesso.","ok");setTimeout(()=>boot(),800);});
+$("#resetPasswordForm")?.addEventListener("submit",async e=>{e.preventDefault();const p1=$("#newPassword").value,p2=$("#confirmNewPassword").value;if(p1!==p2)return setMsg($("#resetPasswordMsg"),"As senhas não coincidem.");const {error}=await sb.auth.updateUser({password:p1});if(error)return setMsg($("#resetPasswordMsg"),error.message);try{await loadProfile();if(profile?.must_change_password)await sb.rpc("complete_password_change");}catch(_e){}setMsg($("#resetPasswordMsg"),"Senha atualizada com sucesso.","ok");setTimeout(()=>boot(),800);});
 
 sb.auth.onAuthStateChange(async(event,session)=>{if(event==="PASSWORD_RECOVERY"){user=session?.user||null;showOnly("#resetView");$("#logoutBtn").classList.remove("hidden");return;}if(session?.user){user=session.user;await loadProfile();await tryPendingInvite();}});
 boot();
@@ -1082,7 +1322,7 @@ function renderAdminSalesHistory(){
   const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
   const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
   const rows=[...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>b.sale_date.localeCompare(a.sale_date)).slice(0,120);
-  $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${reps[s.user_id]||"Representante"}</td><td>${money(s.amount)}</td><td>${s.note||"—"}</td><td><button class="btn btn-xs btn-light" onclick="editSale(${s.id},${Number(s.amount||0)},'${String(s.note||"").replaceAll("'","&#39;")}')">Corrigir</button></td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
+  $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${reps[s.user_id]||"Representante"}</td><td>${money(s.amount)}</td><td>${s.note||"—"}</td><td>${["admin","sub_admin"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="editSale(${s.id},${Number(s.amount||0)},'${String(s.note||"").replaceAll("'","&#39;")}')">Corrigir</button>`:'<span class="muted">Consulta</span>'}</td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
 }
 ["historyRep","historyStart","historyEnd"].forEach(id=>$("#"+id)?.addEventListener("change",renderAdminSalesHistory));
 $("#clearHistoryFilters")?.addEventListener("click",()=>{$("#historyRep").value="";$("#historyStart").value="";$("#historyEnd").value="";renderAdminSalesHistory();});

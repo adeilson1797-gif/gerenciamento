@@ -303,3 +303,56 @@ Para publicar pela Vercel, conecte o plugin Vercel no ChatGPT e o projeto poder�
 - Incluídos Cidade e Estado no acompanhamento de pedidos.
 - Cidade e Estado ficam salvos no cadastro do cliente e são autopreenchidos nos próximos pedidos.
 - Cidade e Estado aparecem na listagem dos pedidos e nas exportações CSV/PDF.
+
+
+## Evolução v5.2 — Guia lateral Base Clientes
+
+### Nova guia lateral do representante
+- Criada uma navegação lateral separando:
+  - **Acompanhamento de vendas**
+  - **Base Clientes**
+- A Base Clientes fica fora do fluxo de vendas e pedidos.
+
+### Cadastro da Base Clientes
+Campos:
+- CNPJ
+- Razão Social
+- Definição: Independente ou Rede
+- Comprador
+- Telefone
+- Nome da Rede
+
+Quando a definição for **Rede**:
+- o representante informa se a unidade é **Matriz** ou **Filial**;
+- se for Filial, deve selecionar qual Matriz está vinculada.
+
+### Contadores
+No topo da Base Clientes:
+- **Cadastros válidos** = Independentes + Matrizes
+- **Contador geral** = Independentes + Matrizes + Filiais
+- também são exibidos contadores separados de Matrizes e Filiais.
+
+### Gestão
+- O representante pode editar ou excluir clientes da própria base.
+- Cada representante acessa somente a própria Base Clientes.
+- Administradores podem consultar os registros via políticas gerenciais do Supabase.
+
+
+## Evolução v5.3 — Gerentes Regionais + reset administrativo de senha
+
+### Gerente Regional
+- Novo perfil de acesso **Gerente Regional**.
+- Cada representante pode receber um Estado (ex.: PB, CE, PE).
+- Cada Gerente Regional pode receber um ou vários estados (ex.: PB, PE, RN).
+- O Gerente Regional acessa o painel gerencial, porém visualiza somente representantes e números pertencentes aos estados atribuídos a ele.
+- O filtro de região é aplicado também no Supabase/RLS, não apenas visualmente no navegador.
+- Acesso regional é somente para consulta: sem alteração de metas, correções, distribuidoras, usuários ou reset geral.
+- O Administrador Geral continua com visão nacional/completa.
+
+### Senha temporária e troca obrigatória
+- Na Gestão de Equipe, o Administrador Geral ganhou o botão **Resetar senha**.
+- O reset define a senha temporária: `redefinirsenha`.
+- O usuário fica marcado com **Troca de senha pendente**.
+- No próximo login, Representante, Sub ADM ou Gerente Regional é direcionado para uma tela obrigatória de criação de nova senha.
+- O painel só é liberado depois que uma senha diferente da temporária for salva.
+- A operação administrativa é feita por uma Supabase Edge Function protegida e validada como Administrador Geral.

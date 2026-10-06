@@ -97,7 +97,31 @@
       </div>
     </section>
 
+    <section id="forcePasswordView" class="auth-shell hidden">
+      <div class="card auth-card">
+        <h1>Troca de senha obrigatória</h1>
+        <p class="muted">Sua senha foi redefinida pelo Administrador Geral. Crie uma nova senha antes de acessar o sistema.</p>
+        <form id="forcePasswordForm">
+          <label>Nova senha</label>
+          <input id="forceNewPassword" type="password" minlength="8" required autocomplete="new-password">
+          <label>Confirmar nova senha</label>
+          <input id="forceConfirmPassword" type="password" minlength="8" required autocomplete="new-password">
+          <button class="btn btn-primary" type="submit">Salvar nova senha</button>
+        </form>
+        <p id="forcePasswordMsg" class="msg"></p>
+      </div>
+    </section>
+
     <section id="repView" class="hidden">
+      <div class="rep-app-shell">
+        <aside class="rep-side-nav">
+          <div class="rep-side-title">Menu</div>
+          <button id="repNavSales" class="rep-nav-btn active" type="button">📊 Acompanhamento de vendas</button>
+          <button id="repNavClients" class="rep-nav-btn" type="button">👥 Base Clientes</button>
+        </aside>
+        <div class="rep-main-content">
+          <div id="repSalesTab">
+
       <div class="hero">
         <div><span class="eyebrow">REPRESENTANTE</span><h1 id="repTitle">Minhas vendas</h1></div>
       </div>
@@ -245,7 +269,116 @@
           </table>
         </div>
       </div>
-    </section>
+    
+          </div>
+
+          <div id="repClientBaseTab" class="hidden">
+            <div class="hero">
+              <div>
+                <span class="eyebrow">BASE CLIENTES</span>
+                <h1>Minha carteira de clientes</h1>
+                <p class="muted">Cadastre sua base comercial separadamente do acompanhamento de vendas.</p>
+              </div>
+            </div>
+
+            <div class="grid grid-4 client-counter-grid">
+              <div class="kpi"><span>Cadastros válidos</span><strong id="clientBaseCountValid">0</strong><small>Independentes + Matrizes</small></div>
+              <div class="kpi"><span>Contador geral</span><strong id="clientBaseCountAll">0</strong><small>Matrizes + Filiais + Independentes</small></div>
+              <div class="kpi"><span>Matrizes</span><strong id="clientBaseCountMatrices">0</strong></div>
+              <div class="kpi"><span>Filiais</span><strong id="clientBaseCountBranches">0</strong></div>
+            </div>
+
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <h2>Cadastrar cliente</h2>
+                  <p class="muted">CNPJ, razão social, definição comercial, comprador, telefone e rede.</p>
+                </div>
+              </div>
+              <form id="clientBaseForm" class="form">
+                <input id="clientBaseEditId" type="hidden">
+                <div class="grid grid-2">
+                  <div>
+                    <label>CNPJ</label>
+                    <input id="clientBaseCnpj" maxlength="18" required placeholder="00.000.000/0000-00">
+                  </div>
+                  <div>
+                    <label>Razão Social</label>
+                    <input id="clientBaseLegalName" required placeholder="Razão social">
+                  </div>
+                </div>
+
+                <div class="grid grid-2">
+                  <div>
+                    <label>Definição</label>
+                    <select id="clientBaseDefinition" required>
+                      <option value="independente">Independente</option>
+                      <option value="rede">Rede</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Comprador</label>
+                    <input id="clientBaseBuyer" placeholder="Nome do comprador">
+                  </div>
+                </div>
+
+                <div class="grid grid-2">
+                  <div>
+                    <label>Telefone</label>
+                    <input id="clientBasePhone" placeholder="(00) 00000-0000">
+                  </div>
+                  <div id="clientBaseNetworkWrap" class="hidden">
+                    <label>Nome da rede</label>
+                    <input id="clientBaseNetworkName" placeholder="Ex.: Rede Saúde">
+                  </div>
+                </div>
+
+                <div id="clientBaseNetworkDetails" class="grid grid-2 hidden">
+                  <div>
+                    <label>Tipo da unidade</label>
+                    <select id="clientBaseUnitType">
+                      <option value="matriz">Matriz</option>
+                      <option value="filial">Filial</option>
+                    </select>
+                  </div>
+                  <div id="clientBaseMatrixWrap" class="hidden">
+                    <label>Matriz vinculada</label>
+                    <select id="clientBaseParentMatrix">
+                      <option value="">Selecione a matriz...</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="action-row">
+                  <button class="btn btn-primary" type="submit">Salvar cliente</button>
+                  <button id="clientBaseCancelEdit" class="btn btn-light hidden" type="button">Cancelar edição</button>
+                </div>
+                <p id="clientBaseMsg" class="msg"></p>
+              </form>
+            </div>
+
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <h2>Clientes cadastrados</h2>
+                  <p class="muted">Matrizes, filiais e clientes independentes da sua base.</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>CNPJ</th><th>Razão Social</th><th>Definição</th><th>Unidade</th><th>Matriz</th><th>Comprador</th><th>Telefone</th><th>Rede</th><th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="clientBaseTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+</section>
 
     <section id="adminView" class="hidden">
       <div class="manager-access-line"><span id="managerRoleBadge" class="role-badge">Gestor</span></div>
@@ -341,7 +474,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Nome</th><th>Cargo/Função</th><th>Perfil de acesso</th><th>Meta mensal</th><th>Status</th><th>Ação</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Cargo/Função</th><th>Perfil de acesso</th><th>Estado / Região</th><th>Meta mensal</th><th>Status</th><th>Senha</th><th>Ação</th></tr></thead>
             <tbody id="userManagementTable"></tbody>
           </table>
         </div>
@@ -486,12 +619,22 @@
             <select id="inviteRole">
               <option value="rep">Representante</option>
               <option value="sub_admin">Subadministrador</option>
+              <option value="regional_manager">Gerente Regional</option>
             </select>
             <label>Nome</label>
             <input id="inviteName" required>
             <div id="inviteTargetWrap">
               <label>Meta mensal (R$)</label>
               <input id="inviteTarget" type="number" min="0" step="0.01" value="0">
+            </div>
+            <div id="inviteStateWrap">
+              <label>Estado do representante</label>
+              <input id="inviteState" maxlength="2" placeholder="Ex.: PB">
+            </div>
+            <div id="inviteManagedStatesWrap" class="hidden">
+              <label>Estados gerenciados</label>
+              <input id="inviteManagedStates" placeholder="Ex.: PB, PE, RN">
+              <small class="muted">Separe os estados por vírgula.</small>
             </div>
             <button class="btn btn-primary" type="submit">Gerar código</button>
           </form>
