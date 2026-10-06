@@ -13,6 +13,13 @@ function formatCNPJ(value){
   if(d.length!==14)return d;
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12,14)}`;
 }
+function normalizeLegalName(value){
+  return String(value||"")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^\p{L}\p{N}]+/gu," ")
+    .trim().replace(/\s+/g," ").toUpperCase();
+}
+
 
 let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, clientBaseCache=[], dailyChart=null;
 
@@ -188,6 +195,8 @@ function resetClientBaseForm(){
   $("#clientBaseDefinition").value="independente";
   $("#clientBaseBuyer").value="";
   $("#clientBasePhone").value="";
+  $("#clientBaseCity").value="";
+  $("#clientBaseState").value="";
   $("#clientBaseNetworkName").value="";
   $("#clientBaseUnitType").value="matriz";
   $("#clientBaseParentMatrix").value="";
@@ -222,13 +231,18 @@ async function loadClientBase(){
   if(!user || profile?.role!=="rep") return;
   setMsg($("#clientBaseMsg"),"");
 
-  const {data,error}=await sb.from("client_base")
-    .select("*")
-    .eq("user_id",user.id)
-    .order("legal_name");
+  const [
+    {data,error},
+    {data:operationalCustomers,error:ocErr},
+    {data:historicalOrders,error:hoErr}
+  ]=await Promise.all([
+    sb.from("client_base").select("*").eq("user_id",user.id).order("legal_name"),
+    sb.from("customers").select("id,cnpj,legal_name").eq("user_id",user.id),
+    sb.from("sales_orders").select("id,cnpj,legal_name,order_number,order_date").eq("user_id",user.id).order("order_date",{ascending:false}).limit(5000)
+  ]);
 
-  if(error){
-    setMsg($("#clientBaseMsg"),error.message);
+  if(error||ocErr||hoErr){
+    setMsg($("#clientBaseMsg"),(error||ocErr||hoErr).message);
     return;
   }
 
@@ -259,6 +273,8 @@ async function loadClientBase(){
     return `<tr>
       <td><span class="cnpj-chip">${formatCNPJ(c.cnpj)}</span></td>
       <td><strong>${c.legal_name}</strong></td>
+      <td>${c.city||"—"}</td>
+      <td>${c.state||"—"}</td>
       <td>${definitionLabel}</td>
       <td><span class="client-type-pill ${cls}">${unitLabel}</span></td>
       <td>${matrixName}</td>
@@ -270,7 +286,61 @@ async function loadClientBase(){
         <button class="btn btn-xs btn-light danger" onclick="deleteClientBase(${c.id},'${String(c.legal_name||"").replaceAll("'","&#39;")}')">Excluir</button>
       </td>
     </tr>`;
-  }).join("")||`<tr><td colspan="9">Nenhum cliente cadastrado na base.</td></tr>`;
+  }).join("")||`<tr><td colspan="11">Nenhum cliente cadastrado na base.</td></tr>`;
+
+  renderClientBaseConflicts(operationalCustomers||[],historicalOrders||[]);
+}
+
+function findBaseConflict(cnpj,legalName){
+  const normalizedCnpj=normalizeCNPJ(cnpj);
+  const normalizedName=normalizeLegalName(legalName);
+  const byCnpj=clientBaseCache.find(c=>normalizeCNPJ(c.cnpj)===normalizedCnpj);
+  const byName=clientBaseCache.find(c=>normalizeLegalName(c.legal_name)===normalizedName);
+
+  if(byCnpj && normalizeLegalName(byCnpj.legal_name)!==normalizedName){
+    return {type:"cnpj_name",base:byCnpj,message:`O CNPJ ${formatCNPJ(normalizedCnpj)} está cadastrado na Base como "${byCnpj.legal_name}".`};
+  }
+  if(byName && normalizeCNPJ(byName.cnpj)!==normalizedCnpj){
+    return {type:"name_cnpj",base:byName,message:`A razão "${byName.legal_name}" está cadastrada com o CNPJ ${formatCNPJ(byName.cnpj)}.`};
+  }
+  return null;
+}
+
+function renderClientBaseConflicts(customers,orders){
+  const raw=[];
+  (customers||[]).forEach(c=>{
+    const conflict=findBaseConflict(c.cnpj,c.legal_name);
+    if(conflict) raw.push({origin:"Cadastro de pedidos",cnpj:c.cnpj,legal_name:c.legal_name,...conflict});
+  });
+  (orders||[]).forEach(o=>{
+    const conflict=findBaseConflict(o.cnpj,o.legal_name);
+    if(conflict) raw.push({origin:`Pedido ${o.order_number||"—"} • ${o.order_date||""}`,cnpj:o.cnpj,legal_name:o.legal_name,...conflict});
+  });
+
+  const seen=new Set();
+  const conflicts=raw.filter(c=>{
+    const key=[c.origin,normalizeCNPJ(c.cnpj),normalizeLegalName(c.legal_name),c.type,c.base?.id].join("|");
+    if(seen.has(key))return false;
+    seen.add(key);return true;
+  });
+
+  const card=$("#clientBaseConflictCard");
+  if(!conflicts.length){
+    card?.classList.add("hidden");
+    $("#clientBaseConflictTable").innerHTML="";
+    $("#clientBaseConflictCount").textContent="0 conflito(s)";
+    return;
+  }
+
+  card?.classList.remove("hidden");
+  $("#clientBaseConflictCount").textContent=`${conflicts.length} conflito(s)`;
+  $("#clientBaseConflictTable").innerHTML=conflicts.map(c=>`<tr>
+    <td>${c.origin}</td>
+    <td><span class="cnpj-chip">${formatCNPJ(c.cnpj)}</span></td>
+    <td>${c.legal_name||"—"}</td>
+    <td><strong>${formatCNPJ(c.base.cnpj)} — ${c.base.legal_name}</strong></td>
+    <td>Revise o cadastro/pedido e mantenha o CNPJ e a Razão exatamente como estão na Base Clientes.</td>
+  </tr>`).join("");
 }
 
 window.editClientBase=(id)=>{
@@ -283,6 +353,8 @@ window.editClientBase=(id)=>{
   $("#clientBaseDefinition").value=c.definition||"independente";
   $("#clientBaseBuyer").value=c.buyer_name||"";
   $("#clientBasePhone").value=c.phone||"";
+  $("#clientBaseCity").value=c.city||"";
+  $("#clientBaseState").value=c.state||"";
   $("#clientBaseNetworkName").value=c.network_name||"";
   $("#clientBaseUnitType").value=c.unit_type||"matriz";
   updateClientBaseDefinitionUI();
@@ -301,6 +373,48 @@ window.deleteClientBase=async(id,name)=>{
   await loadClientBase();
 };
 
+
+function clientBaseExportRows(){
+  const byId=Object.fromEntries((clientBaseCache||[]).map(c=>[String(c.id),c]));
+  return [...(clientBaseCache||[])].sort((a,b)=>String(a.legal_name||"").localeCompare(String(b.legal_name||""))).map(c=>({
+    CNPJ:formatCNPJ(c.cnpj),
+    "Razão Social":c.legal_name||"",
+    Cidade:c.city||"",
+    Estado:c.state||"",
+    Definição:c.definition==="rede"?"Rede":"Independente",
+    Unidade:c.definition==="rede"?(c.unit_type==="filial"?"Filial":"Matriz"):"—",
+    Matriz:c.parent_matrix_id?(byId[String(c.parent_matrix_id)]?.legal_name||"Matriz"):"—",
+    Comprador:c.buyer_name||"",
+    Telefone:c.phone||"",
+    Rede:c.network_name||""
+  }));
+}
+
+$("#clientBaseExportCsvBtn")?.addEventListener("click",()=>{
+  const rows=clientBaseExportRows();
+  if(!rows.length)return alert("Não há clientes cadastrados para exportar.");
+  const headers=["CNPJ","Razão Social","Cidade","Estado","Definição","Unidade","Matriz","Comprador","Telefone","Rede"];
+  const esc=v=>`"${String(v??"").replaceAll('"','""')}"`;
+  const lines=[headers.map(esc).join(";"),...rows.map(r=>headers.map(h=>esc(r[h])).join(";"))];
+  const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="base-clientes.csv";
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+});
+
+$("#clientBaseExportPdfBtn")?.addEventListener("click",()=>{
+  const rows=clientBaseExportRows();
+  if(!rows.length)return alert("Não há clientes cadastrados para exportar.");
+  const w=window.open("","_blank");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Base Clientes</title>
+  <style>body{font-family:Arial;padding:24px;color:#222}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#eef7f1}</style>
+  </head><body><h1>Base Clientes — ${profile?.name||"Representante"}</h1><p>Total de cadastros: ${rows.length}</p>
+  <table><thead><tr><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Definição</th><th>Unidade</th><th>Matriz</th><th>Comprador</th><th>Telefone</th><th>Rede</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Cidade}</td><td>${r.Estado}</td><td>${r["Definição"]}</td><td>${r.Unidade}</td><td>${r.Matriz}</td><td>${r.Comprador}</td><td>${r.Telefone}</td><td>${r.Rede}</td></tr>`).join("")}</tbody></table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+});
+
 $("#clientBaseCnpj")?.addEventListener("input",()=>{
   const d=normalizeCNPJ($("#clientBaseCnpj").value);
   $("#clientBaseCnpj").value=d.length===14?formatCNPJ(d):d;
@@ -316,9 +430,13 @@ $("#clientBaseForm")?.addEventListener("submit",async e=>{
   const definition=$("#clientBaseDefinition").value;
   const buyer_name=$("#clientBaseBuyer").value.trim()||null;
   const phone=$("#clientBasePhone").value.trim()||null;
+  const city=$("#clientBaseCity").value.trim();
+  const state=$("#clientBaseState").value.trim().toUpperCase();
 
   if(cnpj.length!==14)return setMsg($("#clientBaseMsg"),"Informe um CNPJ válido com 14 dígitos.");
   if(!legal_name)return setMsg($("#clientBaseMsg"),"Informe a razão social.");
+  if(!city)return setMsg($("#clientBaseMsg"),"Informe a cidade.");
+  if(!state)return setMsg($("#clientBaseMsg"),"Informe o estado.");
 
   let unit_type=null, network_name=null, parent_matrix_id=null;
 
@@ -342,6 +460,8 @@ $("#clientBaseForm")?.addEventListener("submit",async e=>{
     unit_type,
     buyer_name,
     phone,
+    city,
+    state,
     network_name,
     parent_matrix_id,
     active:true
@@ -385,21 +505,24 @@ async function loadRepOrders(){
   if($("#orderDate")&&!$("#orderDate").value) $("#orderDate").value=today();
 
   const mk=monthNow(),{start,next}=monthBounds(mk);
-  const [{data:customers,error:cErr},{data:orders,error:oErr},{data:distributors,error:dErr}] = await Promise.all([
+  const [{data:customers,error:cErr},{data:orders,error:oErr},{data:distributors,error:dErr},{data:baseClients,error:bErr}] = await Promise.all([
     sb.from("customers").select("*").eq("user_id",user.id).order("legal_name"),
     sb.from("sales_orders").select("*").eq("user_id",user.id).gte("order_date",start).lt("order_date",next).order("order_date",{ascending:false}),
-    sb.from("distributors").select("*").eq("active",true).order("name")
+    sb.from("distributors").select("*").eq("active",true).order("name"),
+    sb.from("client_base").select("*").eq("user_id",user.id).eq("active",true).order("legal_name")
   ]);
-  if(cErr||oErr||dErr){
-    setMsg($("#orderMsg"),(cErr||oErr||dErr).message);
+  if(cErr||oErr||dErr||bErr){
+    setMsg($("#orderMsg"),(cErr||oErr||dErr||bErr).message);
     return;
   }
 
   repCustomersCache=customers||[];
   repOrdersCache=orders||[];
+  clientBaseCache=baseClients||[];
 
-  $("#customerCnpjList").innerHTML=repCustomersCache.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${c.legal_name}</option>`).join("");
-  $("#customerNameList").innerHTML=repCustomersCache.map(c=>`<option value="${c.legal_name}">${formatCNPJ(c.cnpj)}</option>`).join("");
+  const orderClients=clientBaseCache.length?clientBaseCache:repCustomersCache;
+  $("#customerCnpjList").innerHTML=orderClients.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${c.legal_name}</option>`).join("");
+  $("#customerNameList").innerHTML=orderClients.map(c=>`<option value="${c.legal_name}">${formatCNPJ(c.cnpj)}</option>`).join("");
   $("#orderDistributor").innerHTML='<option value="">Selecione...</option>'+(distributors||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
 
   const distNames=Object.fromEntries((distributors||[]).map(d=>[String(d.id),d.name]));
@@ -416,6 +539,7 @@ async function loadRepOrders(){
   </tr>`).join("")||`<tr><td colspan="8">Nenhum pedido registrado neste mês.</td></tr>`;
 
   renderRepCnpjRanking();
+  renderCurrentOrderConflicts();
 }
 
 function renderRepCnpjRanking(){
@@ -437,9 +561,32 @@ function renderRepCnpjRanking(){
   </tr>`).join("")||`<tr><td colspan="5">Sem pedidos para ranquear.</td></tr>`;
 }
 
+
+function renderCurrentOrderConflicts(){
+  const conflicts=(repOrdersCache||[]).map(o=>({order:o,conflict:findBaseConflict(o.cnpj,o.legal_name)})).filter(x=>x.conflict);
+  const box=$("#orderDataConflictBox");
+  if(!conflicts.length){
+    box?.classList.add("hidden");
+    $("#orderDataConflictText").textContent="";
+    return;
+  }
+  box?.classList.remove("hidden");
+  const first=conflicts[0];
+  $("#orderDataConflictText").textContent=`Existem ${conflicts.length} pedido(s) neste mês com divergência. Ex.: pedido ${first.order.order_number||"—"} — ${first.conflict.message} Corrija os dados para manter o histórico consistente.`;
+}
+
+$("#goClientBaseBtn")?.addEventListener("click",()=>setRepTab("clients"));
+
+function findOrderBaseClientByCnpj(cnpj){
+  return (clientBaseCache||[]).find(c=>normalizeCNPJ(c.cnpj)===normalizeCNPJ(cnpj));
+}
+function findOrderBaseClientByName(name){
+  return (clientBaseCache||[]).find(c=>normalizeLegalName(c.legal_name)===normalizeLegalName(name));
+}
+
 function autofillCustomerByCnpj(){
   const cnpj=normalizeCNPJ($("#orderCnpj").value);
-  const match=repCustomersCache.find(c=>c.cnpj===cnpj);
+  const match=findOrderBaseClientByCnpj(cnpj)||repCustomersCache.find(c=>normalizeCNPJ(c.cnpj)===cnpj);
   if(match){
     $("#orderLegalName").value=match.legal_name;
     $("#orderCity").value=match.city||"";
@@ -447,8 +594,8 @@ function autofillCustomerByCnpj(){
   }
 }
 function autofillCustomerByName(){
-  const name=$("#orderLegalName").value.trim().toLowerCase();
-  const match=repCustomersCache.find(c=>String(c.legal_name||"").trim().toLowerCase()===name);
+  const name=$("#orderLegalName").value.trim();
+  const match=findOrderBaseClientByName(name)||repCustomersCache.find(c=>normalizeLegalName(c.legal_name)===normalizeLegalName(name));
   if(match){
     $("#orderCnpj").value=formatCNPJ(match.cnpj);
     $("#orderCity").value=match.city||"";
@@ -485,8 +632,27 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   if(amount<=0)return setMsg($("#orderMsg"),"Informe um valor de pedido maior que zero.");
   if(!order_number)return setMsg($("#orderMsg"),"Informe o número do pedido.");
 
+  const baseByCnpj=findOrderBaseClientByCnpj(cnpj);
+  const baseByName=findOrderBaseClientByName(legal_name);
+
+  if(baseByCnpj && normalizeLegalName(baseByCnpj.legal_name)!==normalizeLegalName(legal_name)){
+    $("#orderDataConflictBox").classList.remove("hidden");
+    $("#orderDataConflictText").textContent=`Este CNPJ pertence a "${baseByCnpj.legal_name}" na Base Clientes. Corrija a Razão Social antes de salvar o pedido.`;
+    return setMsg($("#orderMsg"),`Conflito: o CNPJ ${formatCNPJ(cnpj)} está cadastrado como "${baseByCnpj.legal_name}".`);
+  }
+  if(baseByName && normalizeCNPJ(baseByName.cnpj)!==cnpj){
+    $("#orderDataConflictBox").classList.remove("hidden");
+    $("#orderDataConflictText").textContent=`A Razão Social "${baseByName.legal_name}" pertence ao CNPJ ${formatCNPJ(baseByName.cnpj)} na Base Clientes. Corrija o CNPJ antes de salvar.`;
+    return setMsg($("#orderMsg"),`Conflito: a Razão Social informada está vinculada a outro CNPJ na Base Clientes.`);
+  }
+
+  const canonical=baseByCnpj||baseByName;
+  const safeLegalName=canonical?.legal_name||legal_name;
+  const safeCity=canonical?.city||city;
+  const safeState=(canonical?.state||state).toUpperCase();
+
   const {data:customer,error:cErr}=await sb.from("customers")
-    .upsert({user_id:user.id,cnpj,legal_name,city,state},{onConflict:"user_id,cnpj"})
+    .upsert({user_id:user.id,cnpj,legal_name:safeLegalName,city:safeCity,state:safeState},{onConflict:"user_id,cnpj"})
     .select().single();
   if(cErr)return setMsg($("#orderMsg"),cErr.message);
 
@@ -496,9 +662,9 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     distributor_id,
     order_date,
     cnpj,
-    legal_name,
-    city,
-    state,
+    legal_name:safeLegalName,
+    city:safeCity,
+    state:safeState,
     order_number,
     amount
   });

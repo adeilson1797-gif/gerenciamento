@@ -356,3 +356,24 @@ No topo da Base Clientes:
 - No próximo login, Representante, Sub ADM ou Gerente Regional é direcionado para uma tela obrigatória de criação de nova senha.
 - O painel só é liberado depois que uma senha diferente da temporária for salva.
 - A operação administrativa é feita por uma Supabase Edge Function protegida e validada como Administrador Geral.
+
+
+## Evolução v5.4 — Base Clientes com Cidade/Estado, exportação e validação CNPJ × Razão
+
+### Base Clientes
+- Incluídos **Cidade** e **Estado** no cadastro, edição e listagem.
+- Cidade e Estado passam a ser gravados no Supabase.
+- Adicionados botões **Exportar CSV** e **Exportar PDF** para toda a Base Clientes.
+- Exportações incluem CNPJ, Razão Social, Cidade, Estado, Definição, Unidade, Matriz, Comprador, Telefone e Rede.
+
+### Validação de pedidos
+- Ao lançar pedido, o sistema consulta a **Base Clientes**.
+- Se o CNPJ estiver cadastrado com outra Razão Social, o pedido é bloqueado e o representante recebe a orientação para corrigir.
+- Se a Razão Social estiver cadastrada com outro CNPJ, o pedido também é bloqueado.
+- Quando o cadastro é válido, o sistema usa a Razão Social, Cidade e Estado oficiais da Base Clientes.
+- Pedidos antigos do mês com divergência geram um alerta visível no Acompanhamento de Pedidos.
+- A guia Base Clientes também mostra uma área de conflitos existentes comparando a base com cadastros/pedidos anteriores.
+
+### Visualização
+- A largura útil do site foi ampliada de 1180 px para **1540 px** em telas grandes.
+- Tabelas e cartões receberam mais espaço para facilitar a leitura de dados extensos.

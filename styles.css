@@ -137,3 +137,19 @@ form .btn{width:100%;margin-top:15px}.link-btn{border:0;background:none;color:va
 
 .region-field-stack{display:grid;gap:6px;min-width:190px}.region-field-stack small{color:var(--muted);font-size:11px}
 .force-password-note{font-size:11px;color:var(--muted);display:block;margin-top:4px}.regional-badge{background:#eaf1ff;color:#3158a6}
+
+/* v5.4 - área de dados mais ampla */
+.container{max-width:1540px;padding-left:22px;padding-right:22px}
+.app-footer{max-width:1540px;padding-left:22px;padding-right:22px}
+.rep-app-shell{grid-template-columns:250px minmax(0,1fr);gap:22px}
+.card{padding:20px}
+.table-wrap{border-radius:10px}
+th,td{padding:12px 13px}
+.data-conflict-card{border:1px solid #efc38f;background:#fffaf2}
+.data-conflict-card h2{color:#9a5a00}
+.conflict-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:#fff0d6;color:#8b5500;font-size:12px;font-weight:900}
+.data-conflict-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:1px solid #efc38f;background:#fff8e8;border-radius:12px;color:#7c4b00}
+.data-conflict-inline span{flex:1;min-width:240px}
+@media(max-width:900px){
+  .container,.app-footer{max-width:100%;padding-left:14px;padding-right:14px}
+}
