@@ -77,6 +77,75 @@ function businessDayNeed(target,sold,mk){
 }
 function escapeCsv(v){ const s=String(v??""); return `"${s.replaceAll('"','""')}"`; }
 
+
+function tableRowsForExport(table){
+  const headers=[...table.querySelectorAll("thead th")].map(th=>th.textContent.trim()).filter(Boolean);
+  const rows=[...table.querySelectorAll("tbody tr")].map(tr=>{
+    const cells=[...tr.querySelectorAll("td")];
+    return cells.map(td=>{
+      const input=td.querySelector("input,select");
+      return input ? (input.value||"") : td.textContent.replace(/\s+/g," ").trim();
+    });
+  }).filter(r=>r.length);
+  return {headers,rows};
+}
+
+function exportTableCsv(table,title){
+  const {headers,rows}=tableRowsForExport(table);
+  if(!rows.length)return alert("Não há informações para exportar.");
+  const esc=v=>`"${String(v??"").replaceAll('"','""')}"`;
+  const csv="\ufeff"+[headers,...rows].map(r=>r.map(esc).join(";")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;
+  a.download=`${String(title||"relatorio").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}.csv`;
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+
+function exportTablePdf(table,title){
+  const {headers,rows}=tableRowsForExport(table);
+  if(!rows.length)return alert("Não há informações para exportar.");
+  const w=window.open("","_blank");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+  <style>body{font-family:Arial;padding:24px;color:#222}h1{color:#0b6b3a;font-size:22px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#eef7f1}</style>
+  </head><body><h1>${title}</h1><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+  <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+function ensureTableExportButtons(scopeSelector){
+  document.querySelectorAll(`${scopeSelector} .card`).forEach((card,idx)=>{
+    const table=card.querySelector("table");
+    if(!table || card.querySelector(".auto-export-actions")) return;
+
+    const existingTexts=[...card.querySelectorAll("button")].map(b=>b.textContent.trim().toLowerCase());
+    const hasCsv=existingTexts.some(t=>t.includes("exportar csv"));
+    const hasPdf=existingTexts.some(t=>t.includes("pdf"));
+    if(hasCsv && hasPdf) return;
+
+    const title=(card.querySelector("h2,h3")?.textContent||`Relatório ${idx+1}`).trim();
+    const actions=document.createElement("div");
+    actions.className="action-row auto-export-actions";
+    if(!hasCsv){
+      const csv=document.createElement("button");
+      csv.type="button";csv.className="btn btn-light btn-xs";csv.textContent="Exportar CSV";
+      csv.addEventListener("click",()=>exportTableCsv(table,title));
+      actions.appendChild(csv);
+    }
+    if(!hasPdf){
+      const pdf=document.createElement("button");
+      pdf.type="button";pdf.className="btn btn-light btn-xs";pdf.textContent="Exportar PDF";
+      pdf.addEventListener("click",()=>exportTablePdf(table,title));
+      actions.appendChild(pdf);
+    }
+
+    const head=card.querySelector(".section-head");
+    if(head) head.appendChild(actions);
+    else card.insertBefore(actions,table.parentElement||table);
+  });
+}
+
 async function loadProfile(){
   const {data,error}=await sb.from("profiles").select("*").eq("user_id",user.id).maybeSingle();
   if(error) throw error; profile=data;
@@ -93,29 +162,46 @@ async function boot(){
     showOnly("#forcePasswordView");
     return;
   }
-  if(["admin","sub_admin","regional_manager"].includes(profile.role)){
+  if(["admin","sub_admin","regional_manager","divisional_manager"].includes(profile.role)){
     showOnly("#adminView");
     $("#adminMonth").value=$("#adminMonth").value||monthNow();
     const isMainAdmin=profile.role==="admin";
     const isSubAdmin=profile.role==="sub_admin";
     const isRegional=profile.role==="regional_manager";
-    $("#managerRoleBadge").textContent=isMainAdmin?"Administrador principal":isSubAdmin?"Subadministrador":`Gerente Regional — ${(profile.managed_states||[]).join(", ")||"sem região definida"}`;
+    const isDivisional=profile.role==="divisional_manager";
+
+    $("#managerRoleBadge").textContent=isMainAdmin
+      ?"Administrador principal"
+      :isSubAdmin
+        ?"Subadministrador"
+        :isRegional
+          ?`Gerente Regional — ${(profile.managed_states||[]).join(", ")||"sem região definida"}`
+          :"Gerente Divisional — visão geral";
     $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
     $("#managerRoleBadge").classList.toggle("regional-badge",isRegional);
-    $("#adminInviteCard")?.classList.toggle("hidden",isRegional);
+
+    $("#adminInviteCard")?.classList.toggle("hidden",isDivisional);
     if($("#inviteRole")){
       $("#inviteRole").innerHTML=isMainAdmin
-        ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option><option value="regional_manager">Gerente Regional</option>'
+        ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option><option value="regional_manager">Gerente Regional</option><option value="divisional_manager">Gerente Divisional</option>'
         : '<option value="rep">Representante</option>';
+      if(isRegional && $("#inviteState") && (profile.managed_states||[]).length===1){
+        $("#inviteState").value=profile.managed_states[0];
+      }
       updateInviteRoleFields();
     }
-    $("#userManagementCard")?.classList.toggle("hidden",isRegional);
+
+    $("#userManagementCard")?.classList.toggle("hidden",isDivisional);
     $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
-    $("#itemGoalCreateCard")?.classList.toggle("hidden",isRegional);
-    $("#distributorManagerCard")?.classList.toggle("hidden",isRegional);
+    $("#itemGoalCreateCard")?.classList.toggle("hidden",isDivisional);
+    $("#distributorManagerCard")?.classList.toggle("hidden",isDivisional);
+    $("#divisionalSummaryCard")?.classList.toggle("hidden",!isDivisional);
+
     if($("#userManagementHint")) $("#userManagementHint").textContent=isMainAdmin
       ?"Administrador Geral: altere acesso, cargo/função, estado/região, meta, status e senha dos usuários."
-      :"Subadministrador: defina cargo/função e meta mensal dos cadastrados. Perfis de acesso, região, status e senha ficam reservados ao Administrador Geral.";
+      :isRegional
+        ?"Gerente Regional: permissões operacionais de Sub ADM apenas para os especialistas da sua região."
+        :"Subadministrador: defina cargo/função e meta mensal dos cadastrados. Perfis de acesso, região, status e senha ficam reservados ao Administrador Geral.";
     await loadAdmin();
   } else {
     showOnly("#repView");
@@ -289,6 +375,7 @@ async function loadClientBase(){
   }).join("")||`<tr><td colspan="11">Nenhum cliente cadastrado na base.</td></tr>`;
 
   renderClientBaseConflicts(operationalCustomers||[],historicalOrders||[]);
+  ensureTableExportButtons("#repClientBaseTab");
 }
 
 function findBaseConflict(cnpj,legalName){
@@ -496,6 +583,7 @@ async function loadRep(){
   await loadRepItemGoals($("#saleDate").value||today());
   await loadRepDistributorSummary();
   await loadRepOrders();
+  ensureTableExportButtons("#repView");
 }
 
 
@@ -979,7 +1067,7 @@ async function loadAdmin(){
   ]=await Promise.all([
     sb.from("profiles").select("*").order("name"),
     sb.from("daily_sales").select("*").gte("sale_date",start).lt("sale_date",next),
-    profile.role==="regional_manager" ? Promise.resolve({data:[],error:null}) : sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
+    profile.role==="divisional_manager" ? Promise.resolve({data:[],error:null}) : sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
     sb.from("item_goals").select("*").order("created_at",{ascending:false}),
     sb.from("item_goal_reports").select("*").gte("report_date",start).lt("report_date",next),
     sb.from("distributors").select("*").order("name"),
@@ -1056,7 +1144,7 @@ async function loadAdmin(){
 
   $("#inviteList").innerHTML=(invites||[]).map(i=>`<tr>
     <td>${i.representative_name}</td>
-    <td>${i.invite_role==="sub_admin"?"Subadministrador":i.invite_role==="regional_manager"?"Gerente Regional":"Representante"}</td>
+    <td>${i.invite_role==="sub_admin"?"Subadministrador":i.invite_role==="regional_manager"?"Gerente Regional":i.invite_role==="divisional_manager"?"Gerente Divisional":"Representante"}</td>
     <td>${i.code.slice(0,10)}…</td>
     <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
   </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
@@ -1069,18 +1157,52 @@ async function loadAdmin(){
   renderDistributorSales();
   renderRepDistributorBreakdown();
   renderManagerCnpjRanking();
+  renderDivisionalSummary();
   renderDailyChart(sales||[],mk);
+  ensureTableExportButtons("#adminView");
 }
 
 
+
+function renderDivisionalSummary(){
+  const table=$("#divisionalRegionSummaryTable");
+  if(!table || profile?.role!=="divisional_manager") return;
+
+  const managers=(adminCache.allProfiles||[]).filter(p=>p.role==="regional_manager"&&p.active);
+  const reps=adminCache.reps||[];
+  const sales=adminCache.sales||[];
+
+  const rows=managers.map(m=>{
+    const states=(m.managed_states||[]).map(x=>String(x).toUpperCase());
+    const regionalReps=reps.filter(r=>r.state_code && states.includes(String(r.state_code).toUpperCase()));
+    const ids=new Set(regionalReps.map(r=>r.user_id));
+    const sold=sales.filter(s=>ids.has(s.user_id)).reduce((sum,s)=>sum+Number(s.amount||0),0);
+    const target=regionalReps.reduce((sum,r)=>sum+Number(r.monthly_target||0),0);
+    return {name:m.name,states,reps:regionalReps.length,sold,target,pct:target>0?sold/target:0};
+  }).sort((a,b)=>b.sold-a.sold);
+
+  table.innerHTML=rows.map(r=>`<tr>
+    <td><strong>${r.name}</strong></td>
+    <td>${r.states.join(", ")||"—"}</td>
+    <td>${r.reps}</td>
+    <td>${money(r.sold)}</td>
+    <td>${money(r.target)}</td>
+    <td>${r.target>0?percent(r.pct):"—"}</td>
+  </tr>`).join("")||`<tr><td colspan="6">Nenhum Gerente Regional cadastrado.</td></tr>`;
+}
+
 function roleLabel(role){
-  return role==="admin"?"Administrador Geral":role==="sub_admin"?"Subadministrador":role==="regional_manager"?"Gerente Regional":"Representante";
+  return role==="admin"?"Administrador Geral"
+    :role==="sub_admin"?"Subadministrador"
+    :role==="regional_manager"?"Gerente Regional"
+    :role==="divisional_manager"?"Gerente Divisional"
+    :"Representante";
 }
 
 function renderUserManagement(){
   const card=$("#userManagementCard");
   if(!card) return;
-  const canManage=["admin","sub_admin"].includes(profile?.role);
+  const canManage=["admin","sub_admin","regional_manager"].includes(profile?.role);
   card.classList.toggle("hidden",!canManage);
   if(!canManage) return;
 
@@ -1094,6 +1216,7 @@ function renderUserManagement(){
       ? `<select class="inline-edit role-select user-role" data-id="${p.user_id}">
           <option value="rep" ${p.role==="rep"?"selected":""}>Usuário / Especialista</option>
           <option value="regional_manager" ${p.role==="regional_manager"?"selected":""}>Gerente Regional</option>
+          <option value="divisional_manager" ${p.role==="divisional_manager"?"selected":""}>Gerente Divisional</option>
           <option value="sub_admin" ${p.role==="sub_admin"?"selected":""}>Subadministrador</option>
          </select>`
       : `<strong>${roleLabel(p.role)}</strong><span class="restricted-note">Somente o Administrador Geral altera o perfil de acesso.</span>`}</td>
@@ -1103,7 +1226,7 @@ function renderUserManagement(){
           <input class="inline-edit user-managed-states" data-id="${p.user_id}" value="${String((p.managed_states||[]).join(', ')).replaceAll('"','&quot;')}" placeholder="Regiões do gerente: PB, CE">
           <small>Use Estado para representante e Regiões para Gerente Regional.</small>
          </div>`
-      : `<span>${p.role==="regional_manager"?(p.managed_states||[]).join(", "):(p.state_code||"—")}</span>`}</td>
+      : `<span>${p.role==="regional_manager"?(p.managed_states||[]).join(", "):p.role==="divisional_manager"?"Todas as regiões":(p.state_code||"—")}</span>`}</td>
     <td><input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}"></td>
     <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span>${p.must_change_password?'<span class="force-password-note">Troca de senha pendente</span>':''}</td>
     <td>${isMainAdmin?`<button class="btn btn-xs btn-light" onclick="resetUserPassword('${p.user_id}','${String(p.name||"").replaceAll("'","&#39;")}')">Resetar senha</button>`:'—'}</td>
@@ -1115,12 +1238,12 @@ function renderUserManagement(){
 }
 
 window.saveUserManagement=async(userId)=>{
-  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
 
   const job_title=document.querySelector(`.user-title[data-id="${userId}"]`)?.value.trim()||null;
   const monthly_target=Number(document.querySelector(`.user-target[data-id="${userId}"]`)?.value||0);
 
-  if(profile.role==="sub_admin"){
+  if(["sub_admin","regional_manager"].includes(profile.role)){
     const {error}=await sb.rpc("manager_update_profile_assignment",{
       p_user_id:userId,
       p_job_title:job_title,
@@ -1327,14 +1450,14 @@ $("#distributorForm")?.addEventListener("submit",async e=>{
 });
 
 window.toggleDistributor=async(id,active)=>{
-  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
   const {error}=await sb.from("distributors").update({active:!active}).eq("id",id);
   if(error)return alert(error.message);
   await loadAdmin();
 };
 
 window.saveDistributorName=async(id)=>{
-  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
   const input=document.querySelector(`.distributor-name-edit[data-id="${id}"]`);
   const name=input?.value.trim();
   if(!name)return alert("Informe o nome da distribuidora.");
@@ -1382,7 +1505,7 @@ function renderItemGoalsManager(){
 
 $("#itemGoalForm")?.addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#itemGoalMsg"),"");
-  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
   const row={
     assigned_user_id:$("#goalRep").value,
     item_name:$("#goalItemName").value.trim(),
@@ -1402,7 +1525,7 @@ $("#itemGoalForm")?.addEventListener("submit",async e=>{
   await loadAdmin();
 });
 window.toggleItemGoal=async(id,active)=>{
-  if(!["admin","sub_admin"].includes(profile?.role)) return;
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
   const {error}=await sb.from("item_goals").update({active:!active}).eq("id",id);
   if(error)return alert(error.message);
   await loadAdmin();
@@ -1452,11 +1575,14 @@ $("#inviteRole")?.addEventListener("change",updateInviteRoleFields);
 
 $("#inviteForm").addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#inviteMsg"),"");
-  if(!["admin","sub_admin"].includes(profile?.role)) return setMsg($("#inviteMsg"),"Você não possui permissão para gerar acessos.");
-  const role=profile?.role==="sub_admin"?"rep":($("#inviteRole")?.value||"rep");
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return setMsg($("#inviteMsg"),"Você não possui permissão para gerar acessos.");
+  const role=["sub_admin","regional_manager"].includes(profile?.role)?"rep":($("#inviteRole")?.value||"rep");
   const state_code=role==="rep"?($("#inviteState").value.trim().toUpperCase()||null):null;
   const managed_states=role==="regional_manager"?[...new Set($("#inviteManagedStates").value.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))]:[];
   if(role==="regional_manager"&&!managed_states.length)return setMsg($("#inviteMsg"),"Informe pelo menos um estado para o Gerente Regional.");
+  if(profile?.role==="regional_manager" && (!state_code || !(profile.managed_states||[]).map(x=>String(x).toUpperCase()).includes(state_code))){
+    return setMsg($("#inviteMsg"),"Escolha um estado que pertença à sua região.");
+  }
   const row={
     representative_name:$("#inviteName").value.trim(),
     monthly_target:role==="rep"?Number($("#inviteTarget").value||0):0,
@@ -1472,7 +1598,9 @@ $("#inviteForm").addEventListener("submit",async e=>{
     ?"Convite de subadministrador criado. Envie o código para o segundo gestor."
     :role==="regional_manager"
       ?"Convite de Gerente Regional criado. Envie o código ao gerente."
-      :"Convite de representante criado. Envie o código ao representante.","ok");
+      :role==="divisional_manager"
+        ?"Convite de Gerente Divisional criado. Envie o código ao gerente."
+        :"Convite de representante criado. Envie o código ao representante.","ok");
   await loadAdmin();
 });
 $("#copyCodeBtn").addEventListener("click",async()=>{await navigator.clipboard.writeText($("#generatedCode").textContent);$("#copyCodeBtn").textContent="Copiado!";setTimeout(()=>$("#copyCodeBtn").textContent="Copiar código",1300);});
@@ -1488,7 +1616,7 @@ function renderAdminSalesHistory(){
   const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
   const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
   const rows=[...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>b.sale_date.localeCompare(a.sale_date)).slice(0,120);
-  $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${reps[s.user_id]||"Representante"}</td><td>${money(s.amount)}</td><td>${s.note||"—"}</td><td>${["admin","sub_admin"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="editSale(${s.id},${Number(s.amount||0)},'${String(s.note||"").replaceAll("'","&#39;")}')">Corrigir</button>`:'<span class="muted">Consulta</span>'}</td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
+  $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${reps[s.user_id]||"Representante"}</td><td>${money(s.amount)}</td><td>${s.note||"—"}</td><td>${["admin","sub_admin","regional_manager"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="editSale(${s.id},${Number(s.amount||0)},'${String(s.note||"").replaceAll("'","&#39;")}')">Corrigir</button>`:'<span class="muted">Consulta</span>'}</td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
 }
 ["historyRep","historyStart","historyEnd"].forEach(id=>$("#"+id)?.addEventListener("change",renderAdminSalesHistory));
 $("#clearHistoryFilters")?.addEventListener("click",()=>{$("#historyRep").value="";$("#historyStart").value="";$("#historyEnd").value="";renderAdminSalesHistory();});

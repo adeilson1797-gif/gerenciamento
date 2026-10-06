@@ -377,3 +377,37 @@ No topo da Base Clientes:
 ### Visualização
 - A largura útil do site foi ampliada de 1180 px para **1540 px** em telas grandes.
 - Tabelas e cartões receberam mais espaço para facilitar a leitura de dados extensos.
+
+
+## Evolução v5.5 — Gerente Regional com permissões de Sub ADM + Gerente Divisional
+
+### Gerente Regional
+- Continua identificado no painel como **Gerente Regional**.
+- Passa a ter as mesmas permissões operacionais do Sub ADM:
+  - definir cargo/função;
+  - alterar meta mensal;
+  - criar e acompanhar metas por item;
+  - cadastrar/editar/ativar distribuidoras;
+  - corrigir lançamentos;
+  - gerar convites de representantes.
+- Essas permissões ficam limitadas aos especialistas dos estados atribuídos ao Gerente Regional.
+- O controle de acesso foi reforçado também nas políticas RLS do Supabase.
+
+### Gerente Divisional
+- Novo perfil de acesso: **Gerente Divisional**.
+- Enxerga os dados gerais de todas as regiões e todos os especialistas.
+- Não possui permissão de edição.
+- Novo quadro **Visão por Gerente Regional** mostra:
+  - gerente;
+  - estados;
+  - número de especialistas;
+  - vendas do mês;
+  - meta da região;
+  - percentual da meta.
+- A tabela geral da equipe continua exibindo todos os especialistas individualmente.
+
+### Exportações
+- Tabelas do painel passam a receber automaticamente opções de:
+  - **Exportar CSV**
+  - **Exportar PDF**
+- O mecanismo respeita os dados que o perfil tem permissão para visualizar.

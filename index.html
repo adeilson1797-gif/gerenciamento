@@ -517,6 +517,21 @@
         <p id="userManagementMsg" class="msg"></p>
       </div>
 
+      <div id="divisionalSummaryCard" class="card hidden">
+        <div class="section-head">
+          <div>
+            <h2>Visão por Gerente Regional</h2>
+            <p class="muted">Consolidado geral das regiões para o Gerente Divisional, sem permissão de edição.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Gerente Regional</th><th>Estados</th><th>Especialistas</th><th>Vendas do mês</th><th>Meta da região</th><th>% Meta</th></tr></thead>
+            <tbody id="divisionalRegionSummaryTable"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="section-head">
           <div><h2>Equipe</h2><p class="muted">Quem lançou hoje e como está o mês.</p></div>
@@ -656,6 +671,7 @@
               <option value="rep">Representante</option>
               <option value="sub_admin">Subadministrador</option>
               <option value="regional_manager">Gerente Regional</option>
+              <option value="divisional_manager">Gerente Divisional</option>
             </select>
             <label>Nome</label>
             <input id="inviteName" required>
