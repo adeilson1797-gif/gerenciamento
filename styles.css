@@ -405,3 +405,17 @@ th,td{padding:12px 13px}
   .rep-side-nav{left:20%;right:20%;bottom:6px}
   .grid-4{grid-template-columns:repeat(4,minmax(0,1fr)) !important}
 }
+
+/* v5.8 - campos monetários e correção de vendas */
+.money-input{
+  font-variant-numeric:tabular-nums;
+  font-weight:700;
+}
+.btn.danger,.btn-light.danger{
+  color:var(--danger);
+  border:1px solid rgba(180,35,24,.22);
+  background:#fff7f6;
+}
+.btn.danger:hover,.btn-light.danger:hover{
+  background:#fff0ee;
+}

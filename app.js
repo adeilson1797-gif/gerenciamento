@@ -77,6 +77,64 @@ function businessDayNeed(target,sold,mk){
 }
 function escapeCsv(v){ const s=String(v??""); return `"${s.replaceAll('"','""')}"`; }
 
+function formatBRLInput(value){
+  const n=Number(value||0);
+  if(!Number.isFinite(n)) return "R$ 0,00";
+  return n.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+}
+
+function moneyInputFromDigits(value){
+  const digits=String(value||"").replace(/\D/g,"");
+  const cents=Number(digits||0);
+  return formatBRLInput(cents/100);
+}
+
+function parseCurrencyInput(value){
+  const digits=String(value||"").replace(/\D/g,"");
+  return Number(digits||0)/100;
+}
+
+function parseLooseBRL(value){
+  let s=String(value??"").trim();
+  if(!s) return 0;
+  s=s.replace(/\s/g,"").replace(/^R\$/i,"");
+  if(/^\d+(?:[.,]\d{1,2})?$/.test(s) && !s.includes(".") && !s.includes(",")){
+    return Number(s);
+  }
+  if(s.includes(",")){
+    s=s.replace(/\./g,"").replace(",",".");
+  }else if((s.match(/\./g)||[]).length>1){
+    s=s.replace(/\./g,"");
+  }
+  const n=Number(s.replace(/[^\d.-]/g,""));
+  return Number.isFinite(n)?n:0;
+}
+
+function bindMoneyInput(el){
+  if(!el || el.dataset.moneyBound==="1") return;
+  el.dataset.moneyBound="1";
+  el.addEventListener("input",()=>{
+    el.value=moneyInputFromDigits(el.value);
+    try{
+      const len=el.value.length;
+      el.setSelectionRange(len,len);
+    }catch(_e){}
+  });
+  el.addEventListener("focus",()=>{
+    if(!el.value) el.value="R$ 0,00";
+  });
+  el.addEventListener("blur",()=>{
+    if(el.value) el.value=formatBRLInput(parseCurrencyInput(el.value));
+  });
+}
+
+function bindMoneyInputs(root=document){
+  root.querySelectorAll(".money-input").forEach(bindMoneyInput);
+}
+
+bindMoneyInputs();
+
+
 
 function tableRowsForExport(table){
   const headers=[...table.querySelectorAll("thead th")].map(th=>th.textContent.trim()).filter(Boolean);
@@ -655,11 +713,32 @@ async function loadRepOrders(){
     <td>${distNames[String(o.distributor_id)]||"Distribuidora"}</td>
     <td>${o.order_number}</td>
     <td>${money(o.amount)}</td>
-  </tr>`).join("")||`<tr><td colspan="8">Nenhum pedido registrado neste mês.</td></tr>`;
+    <td><button class="btn btn-xs btn-light danger" type="button" onclick="deleteRepOrder(${o.id},'${String(o.order_number||"").replaceAll("'","&#39;")}',${Number(o.amount||0)})">Apagar</button></td>
+  </tr>`).join("")||`<tr><td colspan="9">Nenhum pedido registrado neste mês.</td></tr>`;
 
   renderRepCnpjRanking();
   renderCurrentOrderConflicts();
 }
+
+
+window.deleteRepOrder=async(orderId,orderNumber,amount)=>{
+  if(profile?.role!=="rep") return;
+  const ok=confirm(`Apagar o pedido ${orderNumber||"selecionado"} no valor de ${money(amount)}?\n\nO valor será retirado automaticamente das vendas do dia, mês, cliente, distribuidora e demais estatísticas.`);
+  if(!ok) return;
+
+  setMsg($("#orderMsg"),"Apagando venda e recalculando os totais...","ok");
+  const {error}=await sb.from("sales_orders")
+    .delete()
+    .eq("id",orderId)
+    .eq("user_id",user.id);
+
+  if(error){
+    return setMsg($("#orderMsg"),`Não foi possível apagar: ${error.message}`);
+  }
+
+  setMsg($("#orderMsg"),"Venda apagada. Todos os totais e estatísticas foram recalculados automaticamente.","ok");
+  await loadRep();
+};
 
 function renderRepCnpjRanking(){
   const grouped={};
@@ -738,7 +817,7 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   const legal_name=$("#orderLegalName").value.trim();
   const city=$("#orderCity").value.trim();
   const state=$("#orderState").value.trim().toUpperCase();
-  const amount=Number($("#orderAmount").value||0);
+  const amount=parseCurrencyInput($("#orderAmount").value);
   const order_number=$("#orderNumber").value.trim();
   const distributor_id=Number($("#orderDistributor").value||0);
   const order_date=$("#orderDate").value;
@@ -912,7 +991,7 @@ function addDistributorEntryRow(distributorId="",amount=""){
   row.className="distributor-entry-row";
   row.innerHTML=`
     <div><label>Distribuidora</label><select class="dist-select">${distributorOptions(distributorId)}</select></div>
-    <div><label>Valor vendido (R$)</label><input class="dist-amount" type="number" min="0.01" step="0.01" value="${amount!==""?Number(amount).toFixed(2):""}" placeholder="0,00"></div>
+    <div><label>Valor vendido (R$)</label><input class="dist-amount money-input" type="text" inputmode="numeric" value="${amount!==""?formatBRLInput(Number(amount)):""}" placeholder="R$ 0,00" autocomplete="off"></div>
     <button class="btn btn-light btn-xs remove-row" type="button">Remover</button>`;
   row.querySelector(".dist-amount").addEventListener("input",updateDistributorTotal);
   row.querySelector(".dist-select").addEventListener("change",updateDistributorTotal);
@@ -922,7 +1001,7 @@ function addDistributorEntryRow(distributorId="",amount=""){
 
 function updateDistributorTotal(){
   const total=[...document.querySelectorAll("#repDistributorRows .dist-amount")]
-    .reduce((s,i)=>s+Number(i.value||0),0);
+    .reduce((s,i)=>s+parseCurrencyInput(i.value),0);
   $("#saleAmount").value=total.toFixed(2);
 }
 
@@ -932,7 +1011,7 @@ function collectDistributorBreakdown(){
   const used=new Set();
   for(const row of rows){
     const distributor_id=Number(row.querySelector(".dist-select")?.value||0);
-    const amount=Number(row.querySelector(".dist-amount")?.value||0);
+    const amount=parseCurrencyInput(row.querySelector(".dist-amount")?.value);
     if(!distributor_id && !amount) continue;
     if(!distributor_id) return {ok:false,message:"Selecione a distribuidora em todas as linhas preenchidas."};
     if(amount<=0) return {ok:false,message:"Informe um valor maior que zero para cada distribuidora selecionada."};
@@ -1137,12 +1216,13 @@ async function loadAdmin(){
   $("#admDailyNeed").textContent=target>0?money(need):"—";
   const activeItemGoals=(itemGoals||[]).filter(g=>g.active);
   const activeGoalIds=new Set(activeItemGoals.map(g=>g.id));
-  const itemTargetTotal=activeItemGoals.reduce((s,g)=>s+Number(g.target_quantity||0),0);
+  const itemGoalCount=activeItemGoals.length;
+  const itemTargetUnits=activeItemGoals.reduce((s,g)=>s+Number(g.target_quantity||0),0);
   const itemSoldTotal=(itemReports||[]).filter(r=>activeGoalIds.has(r.goal_id)).reduce((s,r)=>s+Number(r.quantity||0),0);
-  $("#admItemTargetTotal").textContent=`${itemTargetTotal} un.`;
+  $("#admItemTargetTotal").textContent=String(itemGoalCount);
   $("#admItemSoldTotal").textContent=`${itemSoldTotal} un.`;
-  $("#admItemPct").textContent=itemTargetTotal>0?percent(itemSoldTotal/itemTargetTotal):"—";
-  $("#admItemRemaining").textContent=`${Math.max(itemTargetTotal-itemSoldTotal,0)} un.`;
+  $("#admItemPct").textContent=itemTargetUnits>0?percent(itemSoldTotal/itemTargetUnits):"—";
+  $("#admItemRemaining").textContent=`${Math.max(itemTargetUnits-itemSoldTotal,0)} un.`;
 
   $("#admActive").textContent=reps.length;$("#admReported").textContent=reported;$("#admPending").textContent=Math.max(reps.length-reported,0);
 
@@ -1336,9 +1416,9 @@ function renderDivisionalItemGoals(){
   activeGoals.forEach(g=>{
     const rep=repById[g.assigned_user_id];
     const state=String(rep?.state_code||"SEM ESTADO").toUpperCase();
-    grouped[state]||={state,goalIds:new Set(),items:new Set(),target:0,sold:0};
+    grouped[state]||={state,goalIds:new Set(),goalCount:0,target:0,sold:0};
     grouped[state].goalIds.add(g.id);
-    grouped[state].items.add(normalizeItemName(g.item_name));
+    grouped[state].goalCount+=1;
     grouped[state].target+=Number(g.target_quantity||0);
   });
 
@@ -1353,7 +1433,7 @@ function renderDivisionalItemGoals(){
   table.innerHTML=rows.map(r=>`<tr>
     <td><strong>${r.state}</strong></td>
     <td>${r.manager}</td>
-    <td>${r.items.size}</td>
+    <td>${r.goalCount}</td>
     <td>${r.target} un.</td>
     <td>${r.sold} un.</td>
     <td>${r.target>0?percent(r.pct):"—"}</td>
@@ -1424,7 +1504,7 @@ function renderUserManagement(){
           <small>Use Estado para representante e Regiões para Gerente Regional.</small>
          </div>`
       : `<span>${p.role==="regional_manager"?(p.managed_states||[]).join(", "):p.role==="divisional_manager"?"Todas as regiões":(p.state_code||"—")}</span>`}</td>
-    <td><input class="inline-edit user-target" data-id="${p.user_id}" type="number" min="0" step="0.01" value="${Number(p.monthly_target||0)}"></td>
+    <td><input class="inline-edit user-target money-input" data-id="${p.user_id}" type="text" inputmode="numeric" value="${formatBRLInput(Number(p.monthly_target||0))}" autocomplete="off"></td>
     <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span>${p.must_change_password?'<span class="force-password-note">Troca de senha pendente</span>':''}</td>
     <td>${isMainAdmin?`<button class="btn btn-xs btn-light" onclick="resetUserPassword('${p.user_id}','${String(p.name||"").replaceAll("'","&#39;")}')">Resetar senha</button>`:'—'}</td>
     <td>
@@ -1438,7 +1518,7 @@ window.saveUserManagement=async(userId)=>{
   if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
 
   const job_title=document.querySelector(`.user-title[data-id="${userId}"]`)?.value.trim()||null;
-  const monthly_target=Number(document.querySelector(`.user-target[data-id="${userId}"]`)?.value||0);
+  const monthly_target=parseCurrencyInput(document.querySelector(`.user-target[data-id="${userId}"]`)?.value);
 
   if(["sub_admin","regional_manager"].includes(profile.role)){
     const {error}=await sb.rpc("manager_update_profile_assignment",{
@@ -1496,30 +1576,28 @@ function normalizeItemName(name){
 function renderItemPerformance(){
   const goals=(adminCache.itemGoals||[]).filter(g=>g.active&&g.assigned_user_id);
   const reports=adminCache.itemReports||[];
-  const grouped={};
+  const repNames=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
 
-  goals.forEach(g=>{
-    const key=normalizeItemName(g.item_name);
-    grouped[key]||={item:g.item_name,target:0,sold:0,reps:new Set(),goalIds:new Set()};
-    grouped[key].target+=Number(g.target_quantity||0);
-    grouped[key].reps.add(g.assigned_user_id);
-    grouped[key].goalIds.add(g.id);
-  });
+  const rows=goals.map(g=>{
+    const sold=reports
+      .filter(r=>r.goal_id===g.id)
+      .reduce((sum,r)=>sum+Number(r.quantity||0),0);
+    const target=Number(g.target_quantity||0);
+    return {
+      id:g.id,
+      rep:repNames[g.assigned_user_id]||"Especialista",
+      item:g.item_name,
+      target,
+      sold,
+      remaining:Math.max(target-sold,0),
+      pct:target>0?sold/target:0
+    };
+  }).sort((a,b)=>b.pct-a.pct||b.sold-a.sold||a.item.localeCompare(b.item));
 
-  Object.values(grouped).forEach(group=>{
-    group.sold=reports
-      .filter(r=>group.goalIds.has(r.goal_id))
-      .reduce((s,r)=>s+Number(r.quantity||0),0);
-    group.remaining=Math.max(group.target-group.sold,0);
-    group.pct=group.target>0?group.sold/group.target:0;
-  });
-
-  const ranking=Object.values(grouped).sort((a,b)=>b.pct-a.pct||b.sold-a.sold||a.item.localeCompare(b.item));
-
-  $("#itemPerformanceTable").innerHTML=ranking.map((r,i)=>`<tr>
-    <td><span class="rank-badge">${i+1}º</span></td>
-    <td><strong>${r.item}</strong></td>
-    <td>${r.reps.size}</td>
+  $("#itemPerformanceTable").innerHTML=rows.map((r,i)=>`<tr>
+    <td><span class="rank-badge">${i+1}</span></td>
+    <td><strong>${r.rep}</strong></td>
+    <td><strong>${r.item}</strong><br><small class="muted">Cadastro #${r.id}</small></td>
     <td>${r.target} un.</td>
     <td>${r.sold} un.</td>
     <td>${r.remaining} un.</td>
@@ -1738,8 +1816,8 @@ function renderDailyChart(sales,mk){
 
 window.editRep=async(userId,name,target)=>{
   const newName=prompt("Nome do representante:",name); if(newName===null)return;
-  const targetText=prompt("Meta mensal (R$):",String(target));if(targetText===null)return;
-  const newTarget=Number(String(targetText).replace(",","."));
+  const targetText=prompt("Meta mensal (R$):",formatBRLInput(target));if(targetText===null)return;
+  const newTarget=parseLooseBRL(targetText);
   if(Number.isNaN(newTarget)||newTarget<0)return alert("Meta inválida.");
   const {error}=await sb.from("profiles").update({name:newName.trim()||name,monthly_target:newTarget}).eq("user_id",userId);
   if(error)return alert(error.message);await loadAdmin();
@@ -1766,7 +1844,7 @@ function updateInviteRoleFields(){
   $("#inviteTargetWrap")?.classList.toggle("hidden",!isRep);
   $("#inviteStateWrap")?.classList.toggle("hidden",!isRep);
   $("#inviteManagedStatesWrap")?.classList.toggle("hidden",!isRegional);
-  if(!isRep) $("#inviteTarget").value="0";
+  if(!isRep) $("#inviteTarget").value="R$ 0,00";
 }
 $("#inviteRole")?.addEventListener("change",updateInviteRoleFields);
 
@@ -1782,7 +1860,7 @@ $("#inviteForm").addEventListener("submit",async e=>{
   }
   const row={
     representative_name:$("#inviteName").value.trim(),
-    monthly_target:role==="rep"?Number($("#inviteTarget").value||0):0,
+    monthly_target:role==="rep"?parseCurrencyInput($("#inviteTarget").value):0,
     invite_role:role,
     state_code,
     managed_states
@@ -1819,9 +1897,9 @@ function renderAdminSalesHistory(){
 $("#clearHistoryFilters")?.addEventListener("click",()=>{$("#historyRep").value="";$("#historyStart").value="";$("#historyEnd").value="";renderAdminSalesHistory();});
 
 window.editSale=async(id,amount,note)=>{
-  const value=prompt("Novo valor da venda:",String(amount));
+  const value=prompt("Novo valor da venda:",formatBRLInput(amount));
   if(value===null) return;
-  const newAmount=Number(String(value).replace(",","."));
+  const newAmount=parseLooseBRL(value);
   if(Number.isNaN(newAmount)||newAmount<0) return alert("Valor inválido.");
   const newNote=prompt("Observação:",note) ?? note;
   const {error}=await sb.from("daily_sales").update({amount:newAmount,note:newNote||null}).eq("id",id);

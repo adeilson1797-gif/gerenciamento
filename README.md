@@ -453,3 +453,27 @@ Os outros perfis (Administrador Geral, Sub ADM e Gerente Regional) mantêm o pai
 - Primeira coluna das tabelas fica fixa durante a rolagem horizontal.
 - Gráficos recebem altura adequada no mobile.
 - Em telas grandes, a área útil continua ampla.
+
+
+## v5.8 — Exclusão de venda, moeda em Real e metas por item separadas
+
+### Correção de vendas pelo representante
+- Cada pedido/venda na lista de **Últimos pedidos** passa a ter o botão **Apagar**.
+- A exclusão exige confirmação.
+- Após a exclusão, o sistema recarrega todos os indicadores.
+- O banco já possui gatilho de recálculo automático: ao excluir um pedido, o valor é retirado do total diário, mensal, distribuidoras e demais estatísticas.
+- Ranking de clientes e relatórios também deixam de considerar a venda apagada porque são calculados a partir dos pedidos existentes.
+
+### Formatação em R$
+- Campo **Valor do pedido** do representante passa a usar máscara monetária brasileira.
+- Campo **Meta mensal** em convites passa a usar máscara monetária.
+- Campo **Meta mensal** na Gestão de Equipe passa a usar máscara monetária.
+- Campos dinâmicos de valor por distribuidora também usam a mesma máscara.
+- Edições por prompt passam a apresentar e aceitar valores em padrão brasileiro.
+- Exemplo visual: `R$ 50.000,00`.
+
+### Metas por item
+- O primeiro indicador do painel administrativo agora mostra a quantidade de **metas por item cadastradas**, contando cada cadastro separadamente.
+- A tabela **Desempenho das metas por item** não agrupa mais cadastros com o mesmo nome de produto.
+- Cada meta cadastrada aparece em uma linha própria, com especialista, item, meta, vendido, falta e percentual.
+- No painel Divisional, a quantidade de itens com meta por Estado/Região também passa a contar cada cadastro de meta separadamente.

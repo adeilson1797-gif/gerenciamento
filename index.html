@@ -182,7 +182,7 @@
             </div>
           </div>
           <div class="grid grid-2">
-            <div><label>Valor do pedido (R$)</label><input id="orderAmount" type="number" min="0.01" step="0.01" required placeholder="0,00"></div>
+            <div><label>Valor do pedido (R$)</label><input id="orderAmount" class="money-input" type="text" inputmode="numeric" required placeholder="R$ 0,00" autocomplete="off"></div>
             <div><label>Número do pedido</label><input id="orderNumber" required placeholder="Ex.: 123456"></div>
           </div>
           <button class="btn btn-primary" type="submit">Salvar pedido</button>
@@ -193,7 +193,7 @@
           <h3>Últimos pedidos</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
+              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th><th>Ação</th></tr></thead>
               <tbody id="repOrdersTable"></tbody>
             </table>
           </div>
@@ -439,8 +439,8 @@
         <div class="kpi"><span>Necessário/dia útil</span><strong id="admDailyNeed">R$ 0,00</strong></div>
       </div>
       <div class="grid grid-4 item-kpi-grid">
-        <div class="kpi"><span>Total das metas por item</span><strong id="admItemTargetTotal">0 un.</strong></div>
-        <div class="kpi"><span>Realizado nas metas por item</span><strong id="admItemSoldTotal">0 un.</strong></div>
+        <div class="kpi"><span>Metas por item cadastradas</span><strong id="admItemTargetTotal">0</strong><small>Cada cadastro conta separadamente</small></div>
+        <div class="kpi"><span>Unidades realizadas nos itens</span><strong id="admItemSoldTotal">0 un.</strong></div>
         <div class="kpi"><span>Atingimento dos itens</span><strong id="admItemPct">—</strong></div>
         <div class="kpi"><span>Falta nas metas por item</span><strong id="admItemRemaining">0 un.</strong></div>
       </div>
@@ -636,12 +636,12 @@
         <div class="section-head">
           <div>
             <h2>Desempenho das metas por item</h2>
-            <p class="muted">Contagem separada por produto. A lista é ordenada pelo percentual atingido para mostrar quais itens estão avançando mais rápido.</p>
+            <p class="muted">Cada meta de item cadastrada é contabilizada separadamente, mesmo quando o mesmo produto aparece para mais de um especialista.</p>
           </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Posição</th><th>Item</th><th>Representantes</th><th>Meta total</th><th>Vendido</th><th>Falta</th><th>% atingido</th></tr></thead>
+            <thead><tr><th>#</th><th>Representante</th><th>Item</th><th>Meta</th><th>Vendido</th><th>Falta</th><th>% atingido</th></tr></thead>
             <tbody id="itemPerformanceTable"></tbody>
           </table>
         </div>
@@ -734,7 +734,7 @@
             <input id="inviteName" required>
             <div id="inviteTargetWrap">
               <label>Meta mensal (R$)</label>
-              <input id="inviteTarget" type="number" min="0" step="0.01" value="0">
+              <input id="inviteTarget" class="money-input" type="text" inputmode="numeric" value="R$ 0,00" placeholder="R$ 0,00" autocomplete="off">
             </div>
             <div id="inviteStateWrap">
               <label>Estado do representante</label>
