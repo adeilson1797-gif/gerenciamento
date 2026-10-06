@@ -153,3 +153,11 @@ th,td{padding:12px 13px}
 @media(max-width:900px){
   .container,.app-footer{max-width:100%;padding-left:14px;padding-right:14px}
 }
+
+/* v5.6 - Painel exclusivo do Gerente Divisional */
+#divisionalOnlyDashboard{display:block}
+#divisionalOnlyDashboard.hidden{display:none}
+.chart-box-tall{height:360px}
+@media(max-width:900px){
+  .chart-box-tall{height:300px}
+}

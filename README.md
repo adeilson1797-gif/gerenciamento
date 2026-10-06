@@ -411,3 +411,31 @@ No topo da Base Clientes:
   - **Exportar CSV**
   - **Exportar PDF**
 - O mecanismo respeita os dados que o perfil tem permissão para visualizar.
+
+
+## Evolução v5.6 — Painel exclusivo do Gerente Divisional
+
+As alterações abaixo são aplicadas somente quando o usuário logado possui o perfil **Gerente Divisional**.
+
+### Mantido / incluído no painel Divisional
+- Resultado geral das vendas por Estado.
+- Resultado individual de cada Especialista.
+- Resultado geral por Gerente Regional.
+- Gráfico de evolução acumulada de cada Estado.
+- Gráfico de evolução acumulada de cada Gerente Regional.
+- Resumo simples do total vendido por Distribuidora.
+- Quadro de metas por item por Estado/Região.
+- Gráfico percentual das metas por item por Estado.
+- Exportação PDF e CSV nas tabelas, aproveitando o mecanismo geral de exportação da v5.5.
+- Perfil continua somente leitura, sem permissões de edição.
+
+### Removido somente da visão Divisional
+- Ranking por CNPJ.
+- Convites.
+- Ranking do mês.
+- Vendas por representante e distribuidora.
+- Metas ativas e acompanhamento.
+- Histórico e correção de lançamentos.
+- Formulários de criação/edição e gestão de usuários/distribuidoras.
+
+Os outros perfis (Administrador Geral, Sub ADM e Gerente Regional) mantêm o painel e os recursos já existentes.

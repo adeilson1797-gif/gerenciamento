@@ -532,9 +532,66 @@
         </div>
       </div>
 
-      <div class="card">
+
+      <div id="divisionalOnlyDashboard" class="hidden">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Resultado geral por Estado</h2>
+              <p class="muted">Visão consolidada das vendas, metas e especialistas de cada estado.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Estado</th><th>Especialistas</th><th>Vendas hoje</th><th>Vendas no mês</th><th>Meta</th><th>% Meta</th></tr></thead>
+              <tbody id="divisionalStateResultsTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Evolução das vendas por Estado</h2>
+                <p class="muted">Evolução diária acumulada de cada estado no mês selecionado.</p>
+              </div>
+            </div>
+            <div class="chart-box chart-box-tall"><canvas id="divisionalStateEvolutionChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Evolução das vendas por Gerente Regional</h2>
+                <p class="muted">Evolução diária acumulada das regiões sob responsabilidade de cada gerente.</p>
+              </div>
+            </div>
+            <div class="chart-box chart-box-tall"><canvas id="divisionalManagerEvolutionChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Metas por item — Estados e Regiões</h2>
+              <p class="muted">Mostra onde existem metas por item e o percentual realizado em cada estado/região.</p>
+            </div>
+          </div>
+          <div class="grid grid-2">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Estado</th><th>Gerente / Região</th><th>Itens com meta</th><th>Meta total</th><th>Realizado</th><th>%</th></tr></thead>
+                <tbody id="divisionalItemGoalsByStateTable"></tbody>
+              </table>
+            </div>
+            <div class="chart-box chart-box-tall"><canvas id="divisionalItemGoalsChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="teamResultsCard" class="card">
         <div class="section-head">
-          <div><h2>Equipe</h2><p class="muted">Quem lançou hoje e como está o mês.</p></div>
+          <div><h2 id="teamResultsTitle">Equipe</h2><p id="teamResultsSubtitle" class="muted">Quem lançou hoje e como está o mês.</p></div>
           <div class="action-row">
             <button id="exportBtn" class="btn btn-light">Exportar CSV</button>
             <button id="exportXlsxBtn" class="btn btn-light">Exportar Excel</button>
@@ -550,7 +607,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div id="adminSalesHistoryCard" class="card">
         <div class="section-head"><div><h2>Histórico e correção de lançamentos</h2><p class="muted">Filtre por representante e período, corrija valores e gere relatórios.</p></div><div class="filter-row"><select id="historyRep" class="compact-input"><option value="">Todos os representantes</option></select><input id="historyStart" type="date" class="compact-input"><input id="historyEnd" type="date" class="compact-input"><button id="clearHistoryFilters" class="btn btn-light btn-xs" type="button">Limpar filtros</button></div></div>
         <div class="table-wrap">
           <table>
@@ -646,7 +703,7 @@
         </div>
       </div>
 
-      <div class="grid grid-2">
+      <div id="legacyEvolutionRankingGrid" class="grid grid-2">
         <div class="card">
           <h2>Evolução diária da equipe</h2>
           <div class="chart-box"><canvas id="dailyChart"></canvas></div>
@@ -662,7 +719,7 @@
         </div>
       </div>
 
-      <div class="grid grid-2">
+      <div id="inviteSectionGrid" class="grid grid-2">
         <div id="adminInviteCard" class="card">
           <h2>Gerar convite de acesso</h2>
           <form id="inviteForm">

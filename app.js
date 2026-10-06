@@ -21,7 +21,7 @@ function normalizeLegalName(value){
 }
 
 
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, clientBaseCache=[], dailyChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, clientBaseCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
 
 function showOnly(id){
   ["#authView","#resetView","#forcePasswordView","#repView","#adminView"].forEach(x=>{
@@ -196,6 +196,37 @@ async function boot(){
     $("#itemGoalCreateCard")?.classList.toggle("hidden",isDivisional);
     $("#distributorManagerCard")?.classList.toggle("hidden",isDivisional);
     $("#divisionalSummaryCard")?.classList.toggle("hidden",!isDivisional);
+    $("#divisionalOnlyDashboard")?.classList.toggle("hidden",!isDivisional);
+
+    // O painel Divisional é somente consulta e possui uma composição própria.
+    [
+      "#adminSalesHistoryCard",
+      "#itemGoalsTrackingCard",
+      "#managerCnpjRankingCard",
+      "#inviteSectionGrid",
+      "#legacyEvolutionRankingGrid",
+      "#repDistributorBreakdownCard"
+    ].forEach(sel=>$(sel)?.classList.toggle("hidden",isDivisional));
+
+    // Não mostrar telas de edição/cadastro no Divisional.
+    $("#itemGoalCreateCard")?.classList.toggle("hidden",isDivisional);
+    $("#distributorManagerCard")?.classList.toggle("hidden",isDivisional);
+    $("#userManagementCard")?.classList.toggle("hidden",isDivisional);
+
+    // Manter o resumo simples por distribuidora no Divisional.
+    $("#distributorSalesCard")?.classList.toggle("hidden",false);
+
+    if($("#teamResultsTitle")) $("#teamResultsTitle").textContent=isDivisional?"Resultado geral por Especialista":"Equipe";
+    if($("#teamResultsSubtitle")) $("#teamResultsSubtitle").textContent=isDivisional
+      ?"Resultado individual de cada especialista no mês selecionado."
+      :"Quem lançou hoje e como está o mês.";
+    const distSalesCard=$("#distributorSalesCard");
+    if(distSalesCard && isDivisional){
+      const h2=distSalesCard.querySelector("h2");
+      const p=distSalesCard.querySelector(".muted");
+      if(h2) h2.textContent="Total vendido por Distribuidora";
+      if(p) p.textContent="Resumo simples do total vendido por cada distribuidora no período selecionado.";
+    }
 
     if($("#userManagementHint")) $("#userManagementHint").textContent=isMainAdmin
       ?"Administrador Geral: altere acesso, cargo/função, estado/região, meta, status e senha dos usuários."
@@ -1125,7 +1156,9 @@ async function loadAdmin(){
       <td><span class="status ${statusClass}">${statusText}</span></td>
       <td>${money(s.today)}</td>
       <td>${money(s.month)}</td>
-      <td><div class="dist-summary">${distributorSummaryForRep(r.user_id)}</div></td>
+      <td>${profile.role==="divisional_manager"
+        ? `<span class="muted">Resumo no quadro geral por distribuidora</span>`
+        : `<div class="dist-summary">${distributorSummaryForRep(r.user_id)}</div>`}</td>
       <td>${money(r.monthly_target)}</td>
       <td>${Number(r.monthly_target)>0?percent(s.month/Number(r.monthly_target)):"—"}</td><td>${Number(r.monthly_target)>0?money(need):"—"}</td>
       <td>${s.last?s.last.split("-").reverse().join("/"):"—"}</td>
@@ -1158,6 +1191,7 @@ async function loadAdmin(){
   renderRepDistributorBreakdown();
   renderManagerCnpjRanking();
   renderDivisionalSummary();
+  renderDivisionalDashboard();
   renderDailyChart(sales||[],mk);
   ensureTableExportButtons("#adminView");
 }
@@ -1189,6 +1223,169 @@ function renderDivisionalSummary(){
     <td>${money(r.target)}</td>
     <td>${r.target>0?percent(r.pct):"—"}</td>
   </tr>`).join("")||`<tr><td colspan="6">Nenhum Gerente Regional cadastrado.</td></tr>`;
+}
+
+
+function divisionalStateList(){
+  const states=new Set();
+  (adminCache.reps||[]).forEach(r=>{ if(r.state_code) states.add(String(r.state_code).toUpperCase()); });
+  return [...states].sort();
+}
+
+function managerForState(state){
+  const st=String(state||"").toUpperCase();
+  return (adminCache.allProfiles||[]).find(p=>
+    p.role==="regional_manager" &&
+    p.active &&
+    (p.managed_states||[]).map(x=>String(x).toUpperCase()).includes(st)
+  )||null;
+}
+
+function renderDivisionalStateResults(){
+  const table=$("#divisionalStateResultsTable");
+  if(!table || profile?.role!=="divisional_manager") return;
+
+  const reps=adminCache.reps||[];
+  const sales=adminCache.sales||[];
+  const rows=divisionalStateList().map(state=>{
+    const stateReps=reps.filter(r=>String(r.state_code||"").toUpperCase()===state);
+    const ids=new Set(stateReps.map(r=>r.user_id));
+    const month=sales.filter(s=>ids.has(s.user_id)).reduce((sum,s)=>sum+Number(s.amount||0),0);
+    const todayTotal=sales.filter(s=>ids.has(s.user_id)&&s.sale_date===today()).reduce((sum,s)=>sum+Number(s.amount||0),0);
+    const target=stateReps.reduce((sum,r)=>sum+Number(r.monthly_target||0),0);
+    return {state,reps:stateReps.length,today:todayTotal,month,target,pct:target>0?month/target:0};
+  }).sort((a,b)=>b.month-a.month);
+
+  table.innerHTML=rows.map(r=>`<tr>
+    <td><strong>${r.state}</strong></td>
+    <td>${r.reps}</td>
+    <td>${money(r.today)}</td>
+    <td><strong>${money(r.month)}</strong></td>
+    <td>${money(r.target)}</td>
+    <td>${r.target>0?percent(r.pct):"—"}</td>
+  </tr>`).join("")||`<tr><td colspan="6">Nenhum estado com especialistas cadastrados.</td></tr>`;
+}
+
+function accumulatedSeriesByUsers(userIds,mk){
+  const {y,m}=monthBounds(mk),days=new Date(y,m,0).getDate();
+  const daily=Array(days).fill(0);
+  const ids=new Set(userIds);
+  (adminCache.sales||[]).filter(s=>ids.has(s.user_id)).forEach(s=>{
+    const d=Number(String(s.sale_date).slice(-2));
+    if(d>=1&&d<=days) daily[d-1]+=Number(s.amount||0);
+  });
+  let running=0;
+  return daily.map(v=>(running+=v));
+}
+
+function renderDivisionalEvolutionCharts(){
+  if(profile?.role!=="divisional_manager") return;
+  const mk=adminCache.month||monthNow();
+  const {y,m}=monthBounds(mk),days=new Date(y,m,0).getDate();
+  const labels=Array.from({length:days},(_,i)=>String(i+1).padStart(2,"0"));
+  const reps=adminCache.reps||[];
+
+  const stateDatasets=divisionalStateList().map(state=>{
+    const ids=reps.filter(r=>String(r.state_code||"").toUpperCase()===state).map(r=>r.user_id);
+    return {label:state,data:accumulatedSeriesByUsers(ids,mk),tension:.25,fill:false};
+  });
+
+  const stateCtx=$("#divisionalStateEvolutionChart");
+  if(stateCtx){
+    if(divisionalStateChart) divisionalStateChart.destroy();
+    divisionalStateChart=new Chart(stateCtx,{
+      type:"line",
+      data:{labels,datasets:stateDatasets},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+        plugins:{legend:{display:true,position:"bottom"}},
+        scales:{y:{ticks:{callback:v=>money(v)}}}}
+    });
+  }
+
+  const managers=(adminCache.allProfiles||[]).filter(p=>p.role==="regional_manager"&&p.active);
+  const managerDatasets=managers.map(manager=>{
+    const states=(manager.managed_states||[]).map(x=>String(x).toUpperCase());
+    const ids=reps.filter(r=>states.includes(String(r.state_code||"").toUpperCase())).map(r=>r.user_id);
+    return {label:manager.name,data:accumulatedSeriesByUsers(ids,mk),tension:.25,fill:false};
+  });
+
+  const managerCtx=$("#divisionalManagerEvolutionChart");
+  if(managerCtx){
+    if(divisionalManagerChart) divisionalManagerChart.destroy();
+    divisionalManagerChart=new Chart(managerCtx,{
+      type:"line",
+      data:{labels,datasets:managerDatasets},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+        plugins:{legend:{display:true,position:"bottom"}},
+        scales:{y:{ticks:{callback:v=>money(v)}}}}
+    });
+  }
+}
+
+function renderDivisionalItemGoals(){
+  const table=$("#divisionalItemGoalsByStateTable");
+  if(!table || profile?.role!=="divisional_manager") return;
+
+  const reps=adminCache.reps||[];
+  const activeGoals=(adminCache.itemGoals||[]).filter(g=>g.active&&g.assigned_user_id);
+  const reports=adminCache.itemReports||[];
+
+  const repById=Object.fromEntries(reps.map(r=>[r.user_id,r]));
+  const grouped={};
+
+  activeGoals.forEach(g=>{
+    const rep=repById[g.assigned_user_id];
+    const state=String(rep?.state_code||"SEM ESTADO").toUpperCase();
+    grouped[state]||={state,goalIds:new Set(),items:new Set(),target:0,sold:0};
+    grouped[state].goalIds.add(g.id);
+    grouped[state].items.add(normalizeItemName(g.item_name));
+    grouped[state].target+=Number(g.target_quantity||0);
+  });
+
+  Object.values(grouped).forEach(row=>{
+    row.sold=reports.filter(r=>row.goalIds.has(r.goal_id)).reduce((sum,r)=>sum+Number(r.quantity||0),0);
+    row.pct=row.target>0?row.sold/row.target:0;
+    const mgr=managerForState(row.state);
+    row.manager=mgr?.name||"Sem Gerente Regional";
+  });
+
+  const rows=Object.values(grouped).sort((a,b)=>b.pct-a.pct||b.sold-a.sold);
+  table.innerHTML=rows.map(r=>`<tr>
+    <td><strong>${r.state}</strong></td>
+    <td>${r.manager}</td>
+    <td>${r.items.size}</td>
+    <td>${r.target} un.</td>
+    <td>${r.sold} un.</td>
+    <td>${r.target>0?percent(r.pct):"—"}</td>
+  </tr>`).join("")||`<tr><td colspan="6">Não existem metas por item vinculadas a especialistas.</td></tr>`;
+
+  const ctx=$("#divisionalItemGoalsChart");
+  if(ctx){
+    if(divisionalItemGoalChart) divisionalItemGoalChart.destroy();
+    divisionalItemGoalChart=new Chart(ctx,{
+      type:"bar",
+      data:{
+        labels:rows.map(r=>r.state),
+        datasets:[{
+          label:"% da meta por item realizada",
+          data:rows.map(r=>Number((r.pct*100).toFixed(1)))
+        }]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>`${v}%`}}}
+      }
+    });
+  }
+}
+
+function renderDivisionalDashboard(){
+  if(profile?.role!=="divisional_manager") return;
+  renderDivisionalStateResults();
+  renderDivisionalSummary();
+  renderDivisionalEvolutionCharts();
+  renderDivisionalItemGoals();
 }
 
 function roleLabel(role){
