@@ -477,3 +477,14 @@ Os outros perfis (Administrador Geral, Sub ADM e Gerente Regional) mantêm o pai
 - A tabela **Desempenho das metas por item** não agrupa mais cadastros com o mesmo nome de produto.
 - Cada meta cadastrada aparece em uma linha própria, com especialista, item, meta, vendido, falta e percentual.
 - No painel Divisional, a quantidade de itens com meta por Estado/Região também passa a contar cada cadastro de meta separadamente.
+
+
+## SAPECE v5.9 — Identidade visual
+
+- Novo nome: SAPECE — Sistema de Apuração de Pedidos e Campanhas.
+- Logotipo SAPECE aplicado ao cabeçalho em desktop e celular.
+- Ícone do navegador (favicon) e ícone para adicionar à tela inicial no celular.
+- Identidade azul do cabeçalho inspirada na marca.
+- Nenhuma alteração nas regras de vendas, login, metas ou permissões.
+
+Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do repositório (incluindo as imagens PNG).
