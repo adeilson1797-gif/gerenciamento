@@ -488,3 +488,39 @@ Os outros perfis (Administrador Geral, Sub ADM e Gerente Regional) mantêm o pai
 - Nenhuma alteração nas regras de vendas, login, metas ou permissões.
 
 Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do repositório (incluindo as imagens PNG).
+
+
+## v6.0 — Campanhas dentro do pedido, SKUs, filtros por data e paginação
+
+### Painel do Representante
+- As metas/campanhas por item passam a ser respondidas **dentro do lançamento do pedido**.
+- Para cada item em campanha o representante informa:
+  - se vendeu;
+  - quantidade;
+  - se existe comissão;
+  - valor da comissão.
+- O antigo formulário separado de metas por item fica oculto no painel do representante.
+- Cada pedido passa a registrar também **quantidade de SKUs**.
+- O representante vê seu total de SKUs, quantidade de pedidos e média de SKUs por pedido.
+- Filtro por data inicial/final atualiza vendas, pedidos, ranking de clientes e distribuidoras.
+
+### Painel Gerencial
+- Novo ranking **Horizontalização — SKUs** por especialista.
+- O primeiro colocado recebe indicação de **Maior horizontalização**.
+- O ranking usa total de SKUs dos pedidos no período selecionado.
+- Filtro geral por datas específicas para vendas e rankings, mantendo o mês como referência das metas.
+
+### Campanhas e comissões
+- Nova tabela `order_campaign_items` relaciona cada item de campanha ao pedido.
+- As quantidades informadas nos pedidos alimentam automaticamente `item_goal_reports`.
+- Ao apagar um pedido, os itens de campanha ligados ao pedido são apagados por cascata e a meta é recalculada.
+- Comissão fica registrada por item e por pedido.
+
+### Listas e rankings
+- Tabelas dos painéis do Representante e Gerencial passam a usar paginação automática.
+- Limite visual: **10 registros por página**.
+- Controles Anterior / Próxima aparecem quando necessário.
+
+### Banco
+- `sales_orders.sku_count` registra a quantidade de SKUs por pedido.
+- `order_campaign_items` registra item, quantidade e comissão por pedido.

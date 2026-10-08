@@ -21,7 +21,7 @@ function normalizeLegalName(value){
 }
 
 
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, clientBaseCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[],orders:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, repOrderCampaignMap={}, clientBaseCache=[], orderCampaignGoalCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
 
 function showOnly(id){
   ["#authView","#resetView","#forcePasswordView","#repView","#adminView"].forEach(x=>{
@@ -204,6 +204,94 @@ function ensureTableExportButtons(scopeSelector){
   });
 }
 
+
+function lastDayOfMonthISO(mk){
+  const [y,m]=String(mk).split("-").map(Number);
+  return new Date(y,m,0).toISOString().slice(0,10);
+}
+function defaultRangeForMonth(mk){
+  const start=`${mk}-01`;
+  const end=lastDayOfMonthISO(mk);
+  return {start,end};
+}
+function repSalesRange(){
+  const mk=monthNow(),def=defaultRangeForMonth(mk);
+  return {
+    start:$("#repFilterStart")?.value||def.start,
+    end:$("#repFilterEnd")?.value||def.end
+  };
+}
+function adminSalesRange(){
+  const mk=$("#adminMonth")?.value||monthNow(),def=defaultRangeForMonth(mk);
+  return {
+    start:$("#adminFilterStart")?.value||def.start,
+    end:$("#adminFilterEnd")?.value||def.end
+  };
+}
+function initSalesDateFilters(){
+  const repDef=defaultRangeForMonth(monthNow());
+  if($("#repFilterStart")&&!$("#repFilterStart").value) $("#repFilterStart").value=repDef.start;
+  if($("#repFilterEnd")&&!$("#repFilterEnd").value) $("#repFilterEnd").value=repDef.end;
+
+  const mk=$("#adminMonth")?.value||monthNow();
+  const adminDef=defaultRangeForMonth(mk);
+  if($("#adminFilterStart")&&!$("#adminFilterStart").value) $("#adminFilterStart").value=adminDef.start;
+  if($("#adminFilterEnd")&&!$("#adminFilterEnd").value) $("#adminFilterEnd").value=adminDef.end;
+}
+function validateDateRange(start,end,msgEl){
+  if(!start||!end)return false;
+  if(start>end){
+    if(msgEl)setMsg(msgEl,"A data inicial não pode ser maior que a data final.");
+    return false;
+  }
+  return true;
+}
+
+/* Paginação padrão: 10 posições/linhas por página em rankings e listas */
+const tablePaginationState=new Map();
+function paginateTableBody(tbody,page=1){
+  if(!tbody)return;
+  const rows=[...tbody.querySelectorAll(":scope > tr")];
+  const pageSize=10;
+  const totalPages=Math.max(1,Math.ceil(rows.length/pageSize));
+  page=Math.min(Math.max(1,page),totalPages);
+  tablePaginationState.set(tbody.id,page);
+  rows.forEach((row,i)=>{
+    row.style.display=(i>=(page-1)*pageSize&&i<page*pageSize)?"":"none";
+  });
+
+  const wrap=tbody.closest(".table-wrap");
+  if(!wrap)return;
+  let controls=wrap.parentElement?.querySelector(`.table-pagination[data-for="${tbody.id}"]`);
+  if(!controls){
+    controls=document.createElement("div");
+    controls.className="table-pagination";
+    controls.dataset.for=tbody.id;
+    wrap.insertAdjacentElement("afterend",controls);
+  }
+  if(rows.length<=pageSize){
+    controls.innerHTML="";
+    controls.classList.add("hidden");
+    return;
+  }
+  controls.classList.remove("hidden");
+  controls.innerHTML=`<button class="btn btn-light btn-xs" type="button" ${page<=1?"disabled":""}>Anterior</button>
+    <span>Página ${page} de ${totalPages} • ${rows.length} registros</span>
+    <button class="btn btn-light btn-xs" type="button" ${page>=totalPages?"disabled":""}>Próxima</button>`;
+  const buttons=controls.querySelectorAll("button");
+  buttons[0]?.addEventListener("click",()=>paginateTableBody(tbody,page-1));
+  buttons[1]?.addEventListener("click",()=>paginateTableBody(tbody,page+1));
+}
+function enableAutomaticTablePagination(){
+  document.querySelectorAll("#repView tbody[id],#adminView tbody[id]").forEach(tbody=>{
+    if(tbody.dataset.paginationBound==="1")return;
+    tbody.dataset.paginationBound="1";
+    const observer=new MutationObserver(()=>paginateTableBody(tbody,1));
+    observer.observe(tbody,{childList:true});
+    paginateTableBody(tbody,1);
+  });
+}
+
 async function loadProfile(){
   const {data,error}=await sb.from("profiles").select("*").eq("user_id",user.id).maybeSingle();
   if(error) throw error; profile=data;
@@ -291,13 +379,17 @@ async function boot(){
       :isRegional
         ?"Gerente Regional: permissões operacionais de Sub ADM apenas para os especialistas da sua região."
         :"Subadministrador: defina cargo/função e meta mensal dos cadastrados. Perfis de acesso, região, status e senha ficam reservados ao Administrador Geral.";
+    initSalesDateFilters();
     await loadAdmin();
+    enableAutomaticTablePagination();
   } else {
     showOnly("#repView");
     setRepTab("sales");
     $("#repTitle").textContent=`${profile.job_title?profile.job_title+" — ":""}${profile.name}`;
     $("#saleDate").value=today();
+    initSalesDateFilters();
     await loadRep();
+    enableAutomaticTablePagination();
   }
 }
 
@@ -658,36 +750,57 @@ $("#clientBaseForm")?.addEventListener("submit",async e=>{
 });
 
 async function loadRep(){
-  const mk=monthNow(),{start,next}=monthBounds(mk);
-  const {data,error}=await sb.from("daily_sales").select("*").eq("user_id",user.id).gte("sale_date",start).lt("sale_date",next).order("sale_date",{ascending:false});
+  const {start,end}=repSalesRange();
+  if(!validateDateRange(start,end,$("#saleMsg")))return;
+
+  const {data,error}=await sb.from("daily_sales")
+    .select("*")
+    .eq("user_id",user.id)
+    .gte("sale_date",start)
+    .lte("sale_date",end)
+    .order("sale_date",{ascending:false});
   if(error)return setMsg($("#saleMsg"),error.message);
-  const rows=data||[], month=rows.reduce((s,r)=>s+Number(r.amount||0),0), td=rows.find(r=>r.sale_date===today())?.amount||0;
-  const target=Number(profile.monthly_target||0), rem=Math.max(target-month,0), days=businessDaysRemaining(mk), need=days?rem/days:rem, p=target>0?month/target:0;
-  $("#repToday").textContent=money(td);$("#repMonth").textContent=money(month);$("#repTarget").textContent=money(target);$("#repPct").textContent=target>0?percent(p):"—";
+
+  const rows=data||[];
+  const periodTotal=rows.reduce((s,r)=>s+Number(r.amount||0),0);
+  const td=(start<=today()&&end>=today())?(rows.find(r=>r.sale_date===today())?.amount||0):0;
+  const target=Number(profile.monthly_target||0);
+  const rem=Math.max(target-periodTotal,0),days=businessDaysRemaining(monthNow()),need=days?rem/days:rem,p=target>0?periodTotal/target:0;
+
+  $("#repToday").textContent=money(td);
+  $("#repMonth").textContent=money(periodTotal);
+  $("#repTarget").textContent=money(target);
+  $("#repPct").textContent=target>0?percent(p):"—";
   $("#repRemaining").textContent=target>0?`Faltam ${money(rem)}`:"Meta não definida";
   $("#repProgress").style.width=`${Math.min(p*100,100)}%`;
   $("#repDailyNeed").textContent=target>0?`Média necessária: ${money(need)}/dia útil`:"Média necessária: —";
   $("#repDaysLeft").textContent=`Dias úteis restantes: ${days}`;
-  $("#repHistory").innerHTML=rows.slice(0,12).map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note==="Total automático dos pedidos"?"Pedidos cadastrados":(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido lançado no mês.</td></tr>`;
-  await loadRepItemGoals($("#saleDate").value||today());
+
+  $("#repHistory").innerHTML=rows.map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note==="Total automático dos pedidos"?"Pedidos cadastrados":(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido no período selecionado.</td></tr>`;
+
   await loadRepDistributorSummary();
   await loadRepOrders();
   ensureTableExportButtons("#repView");
+  enableAutomaticTablePagination();
 }
-
-
 
 async function loadRepOrders(){
   if(!user || profile?.role!=="rep") return;
   if($("#orderDate")&&!$("#orderDate").value) $("#orderDate").value=today();
 
-  const mk=monthNow(),{start,next}=monthBounds(mk);
-  const [{data:customers,error:cErr},{data:orders,error:oErr},{data:distributors,error:dErr},{data:baseClients,error:bErr}] = await Promise.all([
+  const {start,end}=repSalesRange();
+  const [
+    {data:customers,error:cErr},
+    {data:orders,error:oErr},
+    {data:distributors,error:dErr},
+    {data:baseClients,error:bErr}
+  ] = await Promise.all([
     sb.from("customers").select("*").eq("user_id",user.id).order("legal_name"),
-    sb.from("sales_orders").select("*").eq("user_id",user.id).gte("order_date",start).lt("order_date",next).order("order_date",{ascending:false}),
+    sb.from("sales_orders").select("*").eq("user_id",user.id).gte("order_date",start).lte("order_date",end).order("order_date",{ascending:false}),
     sb.from("distributors").select("*").eq("active",true).order("name"),
     sb.from("client_base").select("*").eq("user_id",user.id).eq("active",true).order("legal_name")
   ]);
+
   if(cErr||oErr||dErr||bErr){
     setMsg($("#orderMsg"),(cErr||oErr||dErr||bErr).message);
     return;
@@ -697,6 +810,23 @@ async function loadRepOrders(){
   repOrdersCache=orders||[];
   clientBaseCache=baseClients||[];
 
+  const orderIds=repOrdersCache.map(o=>o.id);
+  let campaignRows=[];
+  if(orderIds.length){
+    const {data,error}=await sb.from("order_campaign_items")
+      .select("*")
+      .eq("user_id",user.id)
+      .in("order_id",orderIds);
+    if(error)return setMsg($("#orderMsg"),error.message);
+    campaignRows=data||[];
+  }
+
+  repOrderCampaignMap={};
+  campaignRows.forEach(row=>{
+    repOrderCampaignMap[String(row.order_id)]||=[];
+    repOrderCampaignMap[String(row.order_id)].push(row);
+  });
+
   const orderClients=clientBaseCache.length?clientBaseCache:repCustomersCache;
   $("#customerCnpjList").innerHTML=orderClients.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${c.legal_name}</option>`).join("");
   $("#customerNameList").innerHTML=orderClients.map(c=>`<option value="${c.legal_name}">${formatCNPJ(c.cnpj)}</option>`).join("");
@@ -704,60 +834,144 @@ async function loadRepOrders(){
 
   const distNames=Object.fromEntries((distributors||[]).map(d=>[String(d.id),d.name]));
   repOrderDistributorMap=distNames;
-  $("#repOrdersTable").innerHTML=repOrdersCache.slice(0,30).map(o=>`<tr>
-    <td>${o.order_date.split("-").reverse().join("/")}</td>
-    <td><span class="cnpj-chip">${formatCNPJ(o.cnpj)}</span></td>
-    <td>${o.legal_name}</td>
-    <td>${o.city||"—"}</td>
-    <td>${o.state||"—"}</td>
-    <td>${distNames[String(o.distributor_id)]||"Distribuidora"}</td>
-    <td>${o.order_number}</td>
-    <td>${money(o.amount)}</td>
-    <td><button class="btn btn-xs btn-light danger" type="button" onclick="deleteRepOrder(${o.id},'${String(o.order_number||"").replaceAll("'","&#39;")}',${Number(o.amount||0)})">Apagar</button></td>
-  </tr>`).join("")||`<tr><td colspan="9">Nenhum pedido registrado neste mês.</td></tr>`;
+
+  $("#repOrdersTable").innerHTML=repOrdersCache.map(o=>{
+    const campaign=repOrderCampaignMap[String(o.id)]||[];
+    const campaignQty=campaign.reduce((s,r)=>s+Number(r.quantity||0),0);
+    const commission=campaign.reduce((s,r)=>s+Number(r.commission_value||0),0);
+    return `<tr>
+      <td>${o.order_date.split("-").reverse().join("/")}</td>
+      <td><span class="cnpj-chip">${formatCNPJ(o.cnpj)}</span></td>
+      <td>${o.legal_name}</td>
+      <td>${o.city||"—"}</td>
+      <td>${o.state||"—"}</td>
+      <td>${distNames[String(o.distributor_id)]||"Distribuidora"}</td>
+      <td>${o.order_number}</td>
+      <td><strong>${Number(o.sku_count||0)}</strong></td>
+      <td>${campaign.length?`${campaign.length} item(ns) • ${campaignQty} un.`:"—"}</td>
+      <td>${commission>0?money(commission):"—"}</td>
+      <td>${money(o.amount)}</td>
+      <td><button class="btn btn-xs btn-light danger" type="button" onclick="deleteRepOrder(${o.id},'${String(o.order_number||"").replaceAll("'","&#39;")}',${Number(o.amount||0)})">Apagar</button></td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="12">Nenhum pedido registrado no período selecionado.</td></tr>`;
+
+  const skuTotal=repOrdersCache.reduce((s,o)=>s+Number(o.sku_count||0),0);
+  $("#repSkuTotal").textContent=String(skuTotal);
+  $("#repSkuOrders").textContent=String(repOrdersCache.length);
+  $("#repSkuAverage").textContent=repOrdersCache.length?(skuTotal/repOrdersCache.length).toFixed(1).replace(".",","):"0,0";
 
   renderRepCnpjRanking();
   renderCurrentOrderConflicts();
+  await loadOrderCampaignItems($("#orderDate").value||today());
 }
 
 
-window.deleteRepOrder=async(orderId,orderNumber,amount)=>{
-  if(profile?.role!=="rep") return;
-  const ok=confirm(`Apagar o pedido ${orderNumber||"selecionado"} no valor de ${money(amount)}?\n\nO valor será retirado automaticamente das vendas do dia, mês, cliente, distribuidora e demais estatísticas.`);
-  if(!ok) return;
-
-  setMsg($("#orderMsg"),"Apagando venda e recalculando os totais...","ok");
-  const {error}=await sb.from("sales_orders")
-    .delete()
-    .eq("id",orderId)
-    .eq("user_id",user.id);
-
+async function loadOrderCampaignItems(dateStr){
+  if(!user||profile?.role!=="rep")return;
+  const {data:goals,error}=await sb.from("item_goals")
+    .select("*")
+    .eq("active",true)
+    .lte("start_date",dateStr)
+    .gte("end_date",dateStr)
+    .order("item_name");
   if(error){
-    return setMsg($("#orderMsg"),`Não foi possível apagar: ${error.message}`);
+    $("#orderCampaignStatus").textContent="Erro";
+    $("#orderCampaignItems").innerHTML=`<div class="muted">${error.message}</div>`;
+    return;
   }
 
-  setMsg($("#orderMsg"),"Venda apagada. Todos os totais e estatísticas foram recalculados automaticamente.","ok");
-  await loadRep();
-};
+  orderCampaignGoalCache=(goals||[]).filter(g=>!g.assigned_user_id||g.assigned_user_id===user.id);
+  $("#orderCampaignStatus").textContent=orderCampaignGoalCache.length?`${orderCampaignGoalCache.length} em campanha`:"Sem campanhas";
+  $("#orderCampaignItems").innerHTML=orderCampaignGoalCache.length?orderCampaignGoalCache.map(g=>`
+    <div class="campaign-order-item" data-campaign-goal="${g.id}">
+      <div class="campaign-item-title">
+        <strong>${g.item_name}</strong>
+        <small>Meta: ${Number(g.target_quantity||0)} un.</small>
+      </div>
+      <div>
+        <label>Vendeu este item?</label>
+        <select class="campaign-sold-select">
+          <option value="no">Não</option>
+          <option value="yes">Sim</option>
+        </select>
+      </div>
+      <div class="campaign-qty-wrap hidden">
+        <label>Quantidade</label>
+        <input class="campaign-qty" type="number" min="1" step="1" placeholder="0">
+      </div>
+      <div class="campaign-commission-wrap hidden">
+        <label>Está pagando comissão?</label>
+        <select class="campaign-commission-select">
+          <option value="no">Não</option>
+          <option value="yes">Sim</option>
+        </select>
+      </div>
+      <div class="campaign-commission-value-wrap hidden">
+        <label>Valor da comissão</label>
+        <input class="campaign-commission-value money-input" type="text" inputmode="numeric" placeholder="R$ 0,00">
+      </div>
+    </div>`).join("")
+    :'<div class="muted">Nenhum item em campanha para esta data.</div>';
 
-function renderRepCnpjRanking(){
-  const grouped={};
-  (repOrdersCache||[]).forEach(o=>{
-    const key=o.cnpj;
-    grouped[key]||={cnpj:key,legal_name:o.legal_name,total:0,count:0};
-    grouped[key].total+=Number(o.amount||0);
-    grouped[key].count+=1;
-    if(o.legal_name) grouped[key].legal_name=o.legal_name;
+  document.querySelectorAll("#orderCampaignItems .campaign-order-item").forEach(box=>{
+    const sold=box.querySelector(".campaign-sold-select");
+    const qtyWrap=box.querySelector(".campaign-qty-wrap");
+    const commissionWrap=box.querySelector(".campaign-commission-wrap");
+    const commission=box.querySelector(".campaign-commission-select");
+    const commissionValueWrap=box.querySelector(".campaign-commission-value-wrap");
+
+    sold.addEventListener("change",()=>{
+      const yes=sold.value==="yes";
+      qtyWrap.classList.toggle("hidden",!yes);
+      commissionWrap.classList.toggle("hidden",!yes);
+      if(!yes){
+        box.querySelector(".campaign-qty").value="";
+        commission.value="no";
+        commissionValueWrap.classList.add("hidden");
+        box.querySelector(".campaign-commission-value").value="";
+      }
+    });
+    commission.addEventListener("change",()=>{
+      commissionValueWrap.classList.toggle("hidden",commission.value!=="yes");
+      if(commission.value!=="yes")box.querySelector(".campaign-commission-value").value="";
+    });
   });
-  const ranking=Object.values(grouped).sort((a,b)=>b.total-a.total);
-  $("#repCnpjRankingTable").innerHTML=ranking.map((r,i)=>`<tr>
-    <td>${i+1}º</td>
-    <td><span class="cnpj-chip">${formatCNPJ(r.cnpj)}</span></td>
-    <td>${r.legal_name}</td>
-    <td>${r.count}</td>
-    <td><strong>${money(r.total)}</strong></td>
-  </tr>`).join("")||`<tr><td colspan="5">Sem pedidos para ranquear.</td></tr>`;
+  bindMoneyInputs($("#orderCampaignItems"));
 }
+
+function collectOrderCampaignItems(){
+  const rows=[];
+  for(const box of document.querySelectorAll("#orderCampaignItems .campaign-order-item")){
+    if(box.querySelector(".campaign-sold-select").value!=="yes")continue;
+    const goalId=Number(box.dataset.campaignGoal||0);
+    const quantity=Number(box.querySelector(".campaign-qty").value||0);
+    const commissionPaid=box.querySelector(".campaign-commission-select").value==="yes";
+    const commissionValue=commissionPaid?parseCurrencyInput(box.querySelector(".campaign-commission-value").value):0;
+
+    if(!goalId||quantity<=0)return {ok:false,message:"Informe a quantidade de todos os itens de campanha marcados como vendidos."};
+    if(commissionPaid&&commissionValue<=0)return {ok:false,message:"Informe o valor da comissão quando marcar que o item está pagando comissão."};
+    rows.push({
+      goal_id:goalId,
+      quantity,
+      commission_paid:commissionPaid,
+      commission_value:Number(commissionValue.toFixed(2))
+    });
+  }
+  return {ok:true,rows};
+}
+
+$("#orderDate")?.addEventListener("change",()=>loadOrderCampaignItems($("#orderDate").value||today()));
+
+$("#repApplyFilterBtn")?.addEventListener("click",async()=>{
+  const {start,end}=repSalesRange();
+  if(validateDateRange(start,end,$("#saleMsg")))await loadRep();
+});
+$("#repResetFilterBtn")?.addEventListener("click",async()=>{
+  const def=defaultRangeForMonth(monthNow());
+  $("#repFilterStart").value=def.start;
+  $("#repFilterEnd").value=def.end;
+  await loadRep();
+});
 
 
 function renderCurrentOrderConflicts(){
@@ -819,8 +1033,10 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   const state=$("#orderState").value.trim().toUpperCase();
   const amount=parseCurrencyInput($("#orderAmount").value);
   const order_number=$("#orderNumber").value.trim();
+  const sku_count=Number($("#orderSkuCount").value||0);
   const distributor_id=Number($("#orderDistributor").value||0);
   const order_date=$("#orderDate").value;
+  const campaignData=collectOrderCampaignItems();
 
   if(cnpj.length!==14)return setMsg($("#orderMsg"),"Informe um CNPJ válido com 14 dígitos.");
   if(!legal_name)return setMsg($("#orderMsg"),"Informe a razão social.");
@@ -829,6 +1045,8 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   if(!distributor_id)return setMsg($("#orderMsg"),"Selecione a distribuidora.");
   if(amount<=0)return setMsg($("#orderMsg"),"Informe um valor de pedido maior que zero.");
   if(!order_number)return setMsg($("#orderMsg"),"Informe o número do pedido.");
+  if(!Number.isInteger(sku_count)||sku_count<0)return setMsg($("#orderMsg"),"Informe uma quantidade válida de SKUs.");
+  if(!campaignData.ok)return setMsg($("#orderMsg"),campaignData.message);
 
   const baseByCnpj=findOrderBaseClientByCnpj(cnpj);
   const baseByName=findOrderBaseClientByName(legal_name);
@@ -854,7 +1072,7 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     .select().single();
   if(cErr)return setMsg($("#orderMsg"),cErr.message);
 
-  const {error:oErr}=await sb.from("sales_orders").insert({
+  const {data:savedOrder,error:oErr}=await sb.from("sales_orders").insert({
     user_id:user.id,
     customer_id:customer.id,
     distributor_id,
@@ -864,29 +1082,55 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     city:safeCity,
     state:safeState,
     order_number,
-    amount
-  });
+    amount,
+    sku_count
+  }).select().single();
   if(oErr)return setMsg($("#orderMsg"),oErr.message);
 
-  setMsg($("#orderMsg"),"Pedido salvo. Cliente armazenado para autopreenchimento.","ok");
+  if(campaignData.rows.length){
+    const campaignRows=campaignData.rows.map(r=>({
+      order_id:savedOrder.id,
+      goal_id:r.goal_id,
+      user_id:user.id,
+      report_date:order_date,
+      quantity:r.quantity,
+      commission_paid:r.commission_paid,
+      commission_value:r.commission_value
+    }));
+    const {error:campaignError}=await sb.from("order_campaign_items").insert(campaignRows);
+    if(campaignError){
+      await sb.from("sales_orders").delete().eq("id",savedOrder.id).eq("user_id",user.id);
+      return setMsg($("#orderMsg"),`Não foi possível salvar os itens da campanha: ${campaignError.message}`);
+    }
+  }
+
+  setMsg($("#orderMsg"),"Pedido salvo com SKUs e campanhas atualizados.","ok");
   $("#orderAmount").value="";
   $("#orderNumber").value="";
+  $("#orderSkuCount").value="0";
   await loadRep();
 });
 
 
 
 function repOrderExportRows(){
-  return [...(repOrdersCache||[])].sort((a,b)=>a.order_date.localeCompare(b.order_date)).map(o=>({
-    Data:o.order_date.split("-").reverse().join("/"),
-    CNPJ:formatCNPJ(o.cnpj),
-    "Razão Social":o.legal_name,
-    Cidade:o.city||"",
-    Estado:o.state||"",
-    Distribuidora:repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora",
-    "Número do Pedido":o.order_number,
-    Valor:Number(o.amount||0)
-  }));
+  return [...(repOrdersCache||[])].sort((a,b)=>a.order_date.localeCompare(b.order_date)).map(o=>{
+    const campaign=repOrderCampaignMap[String(o.id)]||[];
+    return {
+      Data:o.order_date.split("-").reverse().join("/"),
+      CNPJ:formatCNPJ(o.cnpj),
+      "Razão Social":o.legal_name,
+      Cidade:o.city||"",
+      Estado:o.state||"",
+      Distribuidora:repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora",
+      "Número do Pedido":o.order_number,
+      SKUs:Number(o.sku_count||0),
+      "Itens em Campanha":campaign.length,
+      "Qtd Campanha":campaign.reduce((s,r)=>s+Number(r.quantity||0),0),
+      "Comissão":campaign.reduce((s,r)=>s+Number(r.commission_value||0),0),
+      Valor:Number(o.amount||0)
+    };
+  });
 }
 
 function escapeCsvCell(value){
@@ -897,7 +1141,7 @@ function escapeCsvCell(value){
 $("#repExportCsvBtn")?.addEventListener("click",()=>{
   const rows=repOrderExportRows();
   if(!rows.length)return alert("Não há pedidos no mês para exportar.");
-  const headers=["Data","CNPJ","Razão Social","Cidade","Estado","Distribuidora","Número do Pedido","Valor"];
+  const headers=["Data","CNPJ","Razão Social","Cidade","Estado","Distribuidora","Número do Pedido","SKUs","Itens em Campanha","Qtd Campanha","Comissão","Valor"];
   const lines=[
     headers.map(escapeCsvCell).join(";"),
     ...rows.map(r=>[
@@ -923,24 +1167,24 @@ $("#repExportPdfBtn")?.addEventListener("click",()=>{
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Minhas vendas</title>
   <style>body{font-family:Arial;padding:28px;color:#222}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#eef7f1}.total{margin-top:16px;font-size:18px;font-weight:bold}</style>
   </head><body><h1>Minhas vendas — ${profile?.name||"Representante"}</h1><p>Período: ${monthNow()}</p>
-  <table><thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th></tr></thead>
-  <tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Cidade||"—"}</td><td>${r.Estado||"—"}</td><td>${r.Distribuidora}</td><td>${r["Número do Pedido"]}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
+  <table><thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>SKUs</th><th>Campanha</th><th>Comissão</th><th>Valor</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Cidade||"—"}</td><td>${r.Estado||"—"}</td><td>${r.Distribuidora}</td><td>${r["Número do Pedido"]}</td><td>${r.SKUs}</td><td>${r["Itens em Campanha"]} item(ns) / ${r["Qtd Campanha"]} un.</td><td>${money(r["Comissão"])}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
   <div class="total">Total: ${money(total)}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 });
 
 async function loadRepDistributorSummary(){
   if(!user || profile?.role!=="rep") return;
-  const mk=monthNow(),{start,next}=monthBounds(mk);
+  const {start,end}=repSalesRange();
   const [{data:rows,error:rErr},{data:distributors,error:dErr}] = await Promise.all([
-    sb.from("daily_sales_distributors").select("*").eq("user_id",user.id).gte("sale_date",start).lt("sale_date",next),
+    sb.from("daily_sales_distributors").select("*").eq("user_id",user.id).gte("sale_date",start).lte("sale_date",end),
     sb.from("distributors").select("*").order("name")
   ]);
   if(rErr||dErr){
     console.error(rErr||dErr);
     return;
   }
-  const all=rows||[], monthTotal=all.reduce((s,r)=>s+Number(r.amount||0),0);
+  const all=rows||[], periodTotal=all.reduce((s,r)=>s+Number(r.amount||0),0);
   const grouped={};
   (distributors||[]).forEach(d=>grouped[d.id]={name:d.name,today:0,month:0});
   all.forEach(r=>{
@@ -953,8 +1197,8 @@ async function loadRepDistributorSummary(){
     <td><strong>${x.name}</strong></td>
     <td>${money(x.today)}</td>
     <td>${money(x.month)}</td>
-    <td>${monthTotal>0?percent(x.month/monthTotal):"—"}</td>
-  </tr>`).join("")||`<tr><td colspan="4">Nenhuma venda por distribuidora neste mês.</td></tr>`;
+    <td>${periodTotal>0?percent(x.month/periodTotal):"—"}</td>
+  </tr>`).join("")||`<tr><td colspan="4">Nenhuma venda por distribuidora no período.</td></tr>`;
 }
 
 async function loadRepDistributors(dateStr){
@@ -1161,7 +1405,8 @@ $("#saveItemGoalsBtn")?.addEventListener("click",async()=>{
 });
 
 async function loadAdmin(){
-  const mk=$("#adminMonth").value||monthNow(),{start,next}=monthBounds(mk);
+  const mk=$("#adminMonth").value||monthNow();
+  const {start,end}=adminSalesRange();
   if($("#goalStartDate")&&!$("#goalStartDate").value) $("#goalStartDate").value=today();
   if($("#goalEndDate")&&!$("#goalEndDate").value) $("#goalEndDate").value=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
   const [
@@ -1176,13 +1421,13 @@ async function loadAdmin(){
     {data:customers,error:cErr}
   ]=await Promise.all([
     sb.from("profiles").select("*").order("name"),
-    sb.from("daily_sales").select("*").gte("sale_date",start).lt("sale_date",next),
+    sb.from("daily_sales").select("*").gte("sale_date",start).lte("sale_date",end),
     profile.role==="divisional_manager" ? Promise.resolve({data:[],error:null}) : sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
     sb.from("item_goals").select("*").order("created_at",{ascending:false}),
-    sb.from("item_goal_reports").select("*").gte("report_date",start).lt("report_date",next),
+    sb.from("item_goal_reports").select("*").gte("report_date",start).lte("report_date",end),
     sb.from("distributors").select("*").order("name"),
-    sb.from("daily_sales_distributors").select("*").gte("sale_date",start).lt("sale_date",next),
-    sb.from("sales_orders").select("*").gte("order_date",start).lt("order_date",next),
+    sb.from("daily_sales_distributors").select("*").gte("sale_date",start).lte("sale_date",end),
+    sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end),
     sb.from("customers").select("*")
   ]);
   if(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||cErr){console.error(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||cErr);return;}
@@ -1250,7 +1495,7 @@ async function loadAdmin(){
   }).join("")||`<tr><td colspan="11">Nenhum representante cadastrado.</td></tr>`;
 
   const historyRep=$("#historyRep"); if(historyRep){const keep=historyRep.value;historyRep.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");historyRep.value=keep;}
-  $("#rankingTable").innerHTML=ranked.slice(0,10).map((r,idx)=>{
+  $("#rankingTable").innerHTML=ranked.map((r,idx)=>{
     const sold=map[r.user_id]?.month||0,target=Number(r.monthly_target||0);
     return `<tr><td>${idx+1}º</td><td>${r.name}</td><td>${money(sold)}</td><td>${target>0?percent(sold/target):"—"}</td></tr>`;
   }).join("")||`<tr><td colspan="4">Sem dados.</td></tr>`;
@@ -1266,6 +1511,7 @@ async function loadAdmin(){
   renderUserManagement();
   renderItemGoalsManager();
   renderItemPerformance();
+  renderSkuRanking();
   renderDistributorManager();
   renderDistributorSales();
   renderRepDistributorBreakdown();
@@ -1573,6 +1819,36 @@ function normalizeItemName(name){
   return String(name||"").trim().replace(/\s+/g," ").toUpperCase();
 }
 
+
+function renderSkuRanking(){
+  const table=$("#skuRankingTable");
+  if(!table)return;
+  const reps=adminCache.reps||[];
+  const orders=adminCache.orders||[];
+  const byRep={};
+
+  reps.forEach(r=>byRep[r.user_id]={name:r.name,state:r.state_code||"—",orders:0,skus:0});
+  orders.forEach(o=>{
+    byRep[o.user_id]||={name:"Especialista",state:"—",orders:0,skus:0};
+    byRep[o.user_id].orders+=1;
+    byRep[o.user_id].skus+=Number(o.sku_count||0);
+  });
+
+  const rows=Object.values(byRep)
+    .filter(r=>r.orders>0||r.skus>0)
+    .map(r=>({...r,avg:r.orders?r.skus/r.orders:0}))
+    .sort((a,b)=>b.skus-a.skus||b.avg-a.avg||a.name.localeCompare(b.name));
+
+  table.innerHTML=rows.map((r,i)=>`<tr>
+    <td><span class="rank-badge">${i+1}º</span>${i===0?'<span class="sku-champion">Maior horizontalização</span>':""}</td>
+    <td><strong>${r.name}</strong></td>
+    <td>${r.state}</td>
+    <td>${r.orders}</td>
+    <td><strong>${r.skus}</strong></td>
+    <td>${r.avg.toFixed(1).replace(".",",")}</td>
+  </tr>`).join("")||`<tr><td colspan="6">Nenhum SKU informado no período.</td></tr>`;
+}
+
 function renderItemPerformance(){
   const goals=(adminCache.itemGoals||[]).filter(g=>g.active&&g.assigned_user_id);
   const reports=adminCache.itemReports||[];
@@ -1829,7 +2105,16 @@ window.deactivateRep=async(userId,name)=>{
 };
 
 $("#refreshBtn").addEventListener("click",loadAdmin);
-$("#adminMonth").addEventListener("change",loadAdmin);
+$("#adminMonth").addEventListener("change",async()=>{
+  const def=defaultRangeForMonth($("#adminMonth").value||monthNow());
+  $("#adminFilterStart").value=def.start;
+  $("#adminFilterEnd").value=def.end;
+  await loadAdmin();
+});
+$("#adminApplyFilterBtn")?.addEventListener("click",async()=>{
+  const {start,end}=adminSalesRange();
+  if(validateDateRange(start,end))await loadAdmin();
+});
 $("#exportBtn").addEventListener("click",()=>{
   const repsById=Object.fromEntries(adminCache.reps.map(r=>[r.user_id,r.name]));
   const rows=[["Data","Representante","Valor","Observação"],...adminCache.sales.sort((a,b)=>a.sale_date.localeCompare(b.sale_date)).map(s=>[s.sale_date,repsById[s.user_id]||s.user_id,s.amount,s.note||""])];
@@ -1890,7 +2175,7 @@ function renderAdminSalesHistory(){
   if(!adminCache.sales)return;
   const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
   const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
-  const rows=[...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>b.sale_date.localeCompare(a.sale_date)).slice(0,120);
+  const rows=[...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>b.sale_date.localeCompare(a.sale_date));
   $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${reps[s.user_id]||"Representante"}</td><td>${money(s.amount)}</td><td>${s.note||"—"}</td><td>${["admin","sub_admin","regional_manager"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="editSale(${s.id},${Number(s.amount||0)},'${String(s.note||"").replaceAll("'","&#39;")}')">Corrigir</button>`:'<span class="muted">Consulta</span>'}</td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
 }
 ["historyRep","historyStart","historyEnd"].forEach(id=>$("#"+id)?.addEventListener("change",renderAdminSalesHistory));

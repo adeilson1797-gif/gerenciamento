@@ -129,9 +129,24 @@
         <div><span class="eyebrow">REPRESENTANTE</span><h1 id="repTitle">Minhas vendas</h1></div>
       </div>
 
+
+      <div id="repSalesFilterCard" class="card compact-filter-card">
+        <div class="section-head">
+          <div>
+            <h2>Filtrar vendas por período</h2>
+            <p class="muted">Escolha datas específicas para atualizar totais, listas e rankings.</p>
+          </div>
+          <div class="filter-row">
+            <input id="repFilterStart" type="date" class="compact-input">
+            <input id="repFilterEnd" type="date" class="compact-input">
+            <button id="repApplyFilterBtn" class="btn btn-secondary btn-xs" type="button">Aplicar filtro</button>
+            <button id="repResetFilterBtn" class="btn btn-light btn-xs" type="button">Mês atual</button>
+          </div>
+        </div>
+      </div>
       <div class="grid grid-4">
         <div class="kpi"><span>Hoje</span><strong id="repToday">R$ 0,00</strong></div>
-        <div class="kpi"><span>Acumulado do mês</span><strong id="repMonth">R$ 0,00</strong></div>
+        <div class="kpi"><span>Total no período</span><strong id="repMonth">R$ 0,00</strong></div>
         <div class="kpi"><span>Meta mensal</span><strong id="repTarget">R$ 0,00</strong></div>
         <div class="kpi"><span>Atingimento</span><strong id="repPct">—</strong></div>
       </div>
@@ -188,6 +203,28 @@
             <div><label>Valor do pedido (R$)</label><input id="orderAmount" class="money-input" type="text" inputmode="numeric" required placeholder="R$ 0,00" autocomplete="off"></div>
             <div><label>Número do pedido</label><input id="orderNumber" required placeholder="Ex.: 123456"></div>
           </div>
+          <div class="grid grid-2">
+            <div>
+              <label>Quantos SKUs foram inseridos no pedido?</label>
+              <input id="orderSkuCount" type="number" min="0" step="1" required value="0" placeholder="Ex.: 12">
+            </div>
+            <div class="sku-help-box">
+              <strong>Horizontalização</strong>
+              <span>Quanto maior a quantidade de SKUs diferentes no pedido, maior a horizontalização.</span>
+            </div>
+          </div>
+
+          <div id="orderCampaignSection" class="campaign-order-box">
+            <div class="section-head">
+              <div>
+                <h3>Itens em campanha</h3>
+                <p class="muted">Informe se algum item da campanha foi vendido neste pedido.</p>
+              </div>
+              <span id="orderCampaignStatus" class="role-badge">Carregando…</span>
+            </div>
+            <div id="orderCampaignItems" class="campaign-order-items"></div>
+          </div>
+
           <button class="btn btn-primary" type="submit">Salvar pedido</button>
           <p id="orderMsg" class="msg"></p>
         </form>
@@ -196,7 +233,7 @@
           <h3>Últimos pedidos</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th><th>Ação</th></tr></thead>
+              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>SKUs</th><th>Campanha</th><th>Comissão</th><th>Valor</th><th>Ação</th></tr></thead>
               <tbody id="repOrdersTable"></tbody>
             </table>
           </div>
@@ -218,7 +255,22 @@
         </div>
       </div>
 
-      <div id="repItemGoalsCard" class="card item-goals-card">
+
+      <div id="repSkuCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Horizontalização por SKUs</h2>
+            <p class="muted">Quantidade de SKUs informados nos pedidos do período selecionado.</p>
+          </div>
+          <span class="role-badge">SKUs</span>
+        </div>
+        <div class="grid grid-3 mini-grid">
+          <div class="mini-kpi"><span>SKUs no período</span><strong id="repSkuTotal">0</strong></div>
+          <div class="mini-kpi"><span>Pedidos</span><strong id="repSkuOrders">0</strong></div>
+          <div class="mini-kpi"><span>Média SKUs/pedido</span><strong id="repSkuAverage">0,0</strong></div>
+        </div>
+      </div>
+      <div id="repItemGoalsCard" class="card item-goals-card hidden">
         <div class="section-head">
           <div>
             <h2>Minhas metas por item</h2>
@@ -423,16 +475,23 @@
       <div class="manager-access-line"><span id="managerRoleBadge" class="role-badge">Gestor</span></div>
       <div class="hero split">
         <div><span class="eyebrow">ADMINISTRADOR</span><h1>Painel gerencial</h1></div>
-        <div class="month-filter">
-          <label>Mês de análise</label>
-          <input id="adminMonth" type="month">
+        <div class="manager-filter-stack">
+          <div class="month-filter">
+            <label>Mês de referência</label>
+            <input id="adminMonth" type="month">
+          </div>
+          <div class="filter-row manager-date-filter">
+            <div><label>De</label><input id="adminFilterStart" type="date" class="compact-input"></div>
+            <div><label>Até</label><input id="adminFilterEnd" type="date" class="compact-input"></div>
+            <button id="adminApplyFilterBtn" class="btn btn-secondary btn-xs" type="button">Aplicar</button>
+          </div>
         </div>
       </div>
 
       <div class="grid grid-4">
         <div class="kpi"><span>Vendas hoje</span><strong id="admToday">R$ 0,00</strong></div>
         <div class="kpi"><span>Vendas ontem</span><strong id="admYesterday">R$ 0,00</strong><small id="admVsYesterday">—</small></div>
-        <div class="kpi"><span>Vendas no mês</span><strong id="admMonth">R$ 0,00</strong></div>
+        <div class="kpi"><span>Vendas no período</span><strong id="admMonth">R$ 0,00</strong></div>
         <div class="kpi"><span>Projeção de fechamento</span><strong id="admProjection">R$ 0,00</strong></div>
       </div>
       <div class="grid grid-4">
@@ -635,7 +694,24 @@
         </div>
       </div>
 
-      <div id="itemPerformanceCard" class="card">
+      
+      <div id="skuRankingCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Ranking de Horizontalização — SKUs</h2>
+            <p class="muted">Classificação dos especialistas pela quantidade total de SKUs inseridos nos pedidos do período.</p>
+          </div>
+          <span class="role-badge">Maior horizontalização</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Posição</th><th>Especialista</th><th>Estado</th><th>Pedidos</th><th>Total SKUs</th><th>Média SKUs/Pedido</th></tr></thead>
+            <tbody id="skuRankingTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+<div id="itemPerformanceCard" class="card">
         <div class="section-head">
           <div>
             <h2>Desempenho das metas por item</h2>
