@@ -472,3 +472,30 @@ th,td{padding:12px 13px}
   .campaign-order-box{padding:10px}
   .table-pagination{position:sticky;left:0;min-width:100%;background:#fff}
 }
+
+/* v6.1 — bloqueio, comissão, positivação e celebração */
+.admin-guide-tabs{display:flex;gap:8px;margin:0 0 16px;padding:5px;background:#edf4ef;border-radius:14px;width:max-content;max-width:100%}
+.admin-guide-btn{border:0;background:transparent;padding:10px 14px;border-radius:10px;font-weight:800;color:var(--muted);cursor:pointer}
+.admin-guide-btn.active{background:#fff;color:var(--green);box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.locked-sale-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#eef3f0;color:#58645d;font-size:11px;font-weight:800}
+.commission-hero-card{border-color:#eadcae;background:linear-gradient(180deg,#fffef8,#fff)}
+.commission-filters{align-items:center;flex-wrap:wrap}
+.commission-filters .compact-input{min-width:180px}
+.goal-celebration{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(8,35,22,.72);padding:20px}
+.goal-celebration-card{position:relative;overflow:hidden;width:min(480px,100%);background:#fff;border-radius:24px;padding:32px;text-align:center;box-shadow:0 28px 80px rgba(0,0,0,.32);animation:celebratePop .55s cubic-bezier(.2,.9,.25,1.2)}
+.celebration-icon{font-size:64px;animation:trophyBounce 1s ease-in-out infinite alternate}
+.goal-celebration-card h2{font-size:34px;color:var(--green);margin:6px 0 8px}
+.goal-celebration-card p{font-size:16px;line-height:1.5;color:var(--muted)}
+.confetti{position:absolute;font-size:18px;animation:confettiFloat 1.8s ease-in-out infinite alternate}
+.confetti-1{left:8%;top:12%}.confetti-2{right:8%;top:16%}.confetti-3{left:14%;bottom:15%}
+.confetti-4{right:14%;bottom:12%}.confetti-5{left:48%;top:5%}.confetti-6{right:42%;bottom:6%}
+@keyframes celebratePop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+@keyframes trophyBounce{from{transform:translateY(0) rotate(-4deg)}to{transform:translateY(-8px) rotate(4deg)}}
+@keyframes confettiFloat{from{transform:translateY(-8px) rotate(0deg);opacity:.55}to{transform:translateY(12px) rotate(180deg);opacity:1}}
+@media(max-width:760px){
+  .admin-guide-tabs{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .admin-guide-btn{padding:10px 6px;font-size:12px}
+  .commission-filters{display:grid!important;grid-template-columns:1fr 1fr}
+  .commission-filters .compact-input{min-width:0;width:100%}
+  .goal-celebration-card{padding:26px 18px}
+}

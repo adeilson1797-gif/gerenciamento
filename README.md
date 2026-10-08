@@ -532,3 +532,34 @@ Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do 
 - A consulta busca somente campanhas ativas dentro da data do pedido e destinadas ao representante logado.
 - Adicionado botão **Atualizar campanhas** para recarregar manualmente.
 - Em caso de erro, o sistema mostra a mensagem real em vez de permanecer em “Carregando…”.
+
+
+## v6.1 — Bloqueio de exclusão pelo representante, CNPJs positivados, comissão e comemoração
+
+### Pedidos e campanhas enviados
+- Representante não pode mais apagar nem alterar pedidos já enviados.
+- Itens de campanha enviados também ficam bloqueados para alteração/exclusão pelo representante.
+- Administrador Geral, Sub ADM e Gerente Regional podem excluir pedidos dentro do seu escopo.
+- Ao excluir um pedido pelo painel gerencial, campanhas ligadas ao pedido e estatísticas são recalculadas automaticamente.
+- Gerente Divisional continua somente leitura.
+
+### CNPJs positivados
+- Novo quadro no painel administrativo: **CNPJs positivados por representante**.
+- Considera CNPJ único com pedido no período filtrado.
+- Mostra representante, estado, CNPJs únicos, pedidos e valor vendido.
+- Filtro por representante.
+- Exportação CSV e PDF.
+
+### Guia Comissão
+- Nova guia **Comissão** no painel administrativo.
+- Exibe somente itens de campanha marcados pelo representante como **com comissão**.
+- Respostas “Não” não aparecem.
+- Mostra data, representante, CNPJ, cliente, item, quantidade, pedido e valor da comissão.
+- Filtros por representante, item e cliente/CNPJ.
+- Indicadores de clientes com comissão, unidades e valor total de comissão.
+- Exportação CSV e PDF.
+
+### Meta mensal
+- Quando o representante atinge a meta mensal, o painel exibe uma animação de parabéns.
+- A comemoração é exibida uma vez por mês por dispositivo/navegador.
+- O cálculo usa o total mensal completo, independentemente do filtro de datas aplicado na tela.

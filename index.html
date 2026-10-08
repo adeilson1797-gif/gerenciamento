@@ -236,7 +236,7 @@
           <h3>Últimos pedidos</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>SKUs</th><th>Campanha</th><th>Comissão</th><th>Valor</th><th>Ação</th></tr></thead>
+              <thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>SKUs</th><th>Campanha</th><th>Comissão</th><th>Valor</th><th>Status</th></tr></thead>
               <tbody id="repOrdersTable"></tbody>
             </table>
           </div>
@@ -491,6 +491,12 @@
         </div>
       </div>
 
+      <div id="adminGuideTabs" class="admin-guide-tabs">
+        <button id="adminGuideMainBtn" class="admin-guide-btn active" type="button">📊 Painel Gerencial</button>
+        <button id="adminGuideCommissionBtn" class="admin-guide-btn" type="button">💰 Comissão</button>
+      </div>
+
+      <div id="adminMainGuide">
       <div class="grid grid-4">
         <div class="kpi"><span>Vendas hoje</span><strong id="admToday">R$ 0,00</strong></div>
         <div class="kpi"><span>Vendas ontem</span><strong id="admYesterday">R$ 0,00</strong><small id="admVsYesterday">—</small></div>
@@ -848,6 +854,48 @@
         </div>
       </div>
 
+
+      <div id="positiveCnpjCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>CNPJs positivados por representante</h2>
+            <p class="muted">Quantidade de clientes únicos com pedidos no período selecionado.</p>
+          </div>
+          <div class="filter-row">
+            <select id="positiveCnpjRepFilter" class="compact-input"><option value="">Todos os representantes</option></select>
+            <button id="positiveCnpjCsvBtn" class="btn btn-light btn-xs" type="button">Exportar CSV</button>
+            <button id="positiveCnpjPdfBtn" class="btn btn-light btn-xs" type="button">Exportar PDF</button>
+          </div>
+        </div>
+        <div class="grid grid-3 mini-grid">
+          <div class="mini-kpi"><span>CNPJs positivados</span><strong id="positiveCnpjTotal">0</strong></div>
+          <div class="mini-kpi"><span>Pedidos no período</span><strong id="positiveCnpjOrders">0</strong></div>
+          <div class="mini-kpi"><span>Valor vendido</span><strong id="positiveCnpjSales">R$ 0,00</strong></div>
+        </div>
+        <div class="table-wrap">
+          <table id="positiveCnpjTableElement">
+            <thead><tr><th>Representante</th><th>Estado</th><th>CNPJs únicos</th><th>Pedidos</th><th>Total vendido</th></tr></thead>
+            <tbody id="positiveCnpjTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="managerOrdersCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Pedidos enviados — correção gerencial</h2>
+            <p class="muted">Representantes não podem mais apagar ou alterar pedidos enviados. Administradores e Gerentes Regionais podem excluir quando houver erro.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="managerOrdersTableElement">
+            <thead><tr><th>Data</th><th>Representante</th><th>CNPJ</th><th>Cliente</th><th>Distribuidora</th><th>Pedido</th><th>Valor</th><th>Ação</th></tr></thead>
+            <tbody id="managerOrdersTable"></tbody>
+          </table>
+        </div>
+        <p id="managerOrdersMsg" class="msg"></p>
+      </div>
+
       <div id="managerCnpjRankingCard" class="card">
         <div class="section-head">
           <div>
@@ -862,8 +910,53 @@
           </table>
         </div>
       </div>
+      </div><!-- /adminMainGuide -->
+
+      <div id="adminCommissionGuide" class="hidden">
+        <div class="card commission-hero-card">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">COMISSÃO</span>
+              <h2>Clientes com comissão em campanhas</h2>
+              <p class="muted">Exibe somente itens em que o representante informou que existe comissão. Respostas “Não” não aparecem nesta guia.</p>
+            </div>
+            <div class="filter-row commission-filters">
+              <select id="commissionRepFilter" class="compact-input"><option value="">Todos os representantes</option></select>
+              <select id="commissionItemFilter" class="compact-input"><option value="">Todos os itens</option></select>
+              <input id="commissionClientFilter" class="compact-input" placeholder="Buscar cliente / CNPJ">
+              <button id="commissionCsvBtn" class="btn btn-light btn-xs" type="button">Exportar CSV</button>
+              <button id="commissionPdfBtn" class="btn btn-light btn-xs" type="button">Exportar PDF</button>
+            </div>
+          </div>
+          <div class="grid grid-3 mini-grid">
+            <div class="mini-kpi"><span>Clientes com comissão</span><strong id="commissionClientCount">0</strong></div>
+            <div class="mini-kpi"><span>Unidades em comissão</span><strong id="commissionUnitCount">0</strong></div>
+            <div class="mini-kpi"><span>Total de comissão</span><strong id="commissionValueTotal">R$ 0,00</strong></div>
+          </div>
+          <div class="table-wrap">
+            <table id="commissionTableElement">
+              <thead><tr><th>Data</th><th>Representante</th><th>CNPJ</th><th>Cliente</th><th>Item campanha</th><th>Qtd.</th><th>Pedido</th><th>Comissão</th></tr></thead>
+              <tbody id="commissionTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
+
+  <div id="goalCelebration" class="goal-celebration hidden" aria-live="polite">
+    <div class="goal-celebration-card">
+      <div class="celebration-icon">🏆</div>
+      <span class="eyebrow">META ATINGIDA</span>
+      <h2>Parabéns!</h2>
+      <p id="goalCelebrationText">Você atingiu sua meta do mês.</p>
+      <button id="closeGoalCelebration" class="btn btn-primary" type="button">Continuar</button>
+      <div class="confetti confetti-1">●</div><div class="confetti confetti-2">◆</div>
+      <div class="confetti confetti-3">▲</div><div class="confetti confetti-4">●</div>
+      <div class="confetti confetti-5">◆</div><div class="confetti confetti-6">▲</div>
+    </div>
+  </div>
+
   <footer class="app-footer">
     <span><strong>SAPECE</strong> — Sistema de Apuração de Pedidos e Campanhas</span>
     <strong>Projeto pessoal — Especialista Escobar-PB</strong>
