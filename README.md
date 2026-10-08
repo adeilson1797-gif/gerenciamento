@@ -524,3 +524,11 @@ Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do 
 ### Banco
 - `sales_orders.sku_count` registra a quantidade de SKUs por pedido.
 - `order_campaign_items` registra item, quantidade e comissão por pedido.
+
+
+## v6.0.1 — Correção do carregamento dos itens em campanha
+- Corrigido o estado de carregamento infinito no formulário de vendas.
+- As campanhas agora são carregadas de forma independente das consultas de pedidos/clientes.
+- A consulta busca somente campanhas ativas dentro da data do pedido e destinadas ao representante logado.
+- Adicionado botão **Atualizar campanhas** para recarregar manualmente.
+- Em caso de erro, o sistema mostra a mensagem real em vez de permanecer em “Carregando…”.

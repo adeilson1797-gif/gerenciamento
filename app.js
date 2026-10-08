@@ -750,6 +750,11 @@ $("#clientBaseForm")?.addEventListener("submit",async e=>{
 });
 
 async function loadRep(){
+  if($("#orderDate")&&!$("#orderDate").value) $("#orderDate").value=today();
+  // Campanhas são carregadas de forma independente para não ficarem presas
+  // caso alguma outra consulta do painel falhe.
+  loadOrderCampaignItems($("#orderDate")?.value||today()).catch(err=>console.error("Campanhas:",err));
+
   const {start,end}=repSalesRange();
   if(!validateDateRange(start,end,$("#saleMsg")))return;
 
@@ -862,85 +867,119 @@ async function loadRepOrders(){
 
   renderRepCnpjRanking();
   renderCurrentOrderConflicts();
-  await loadOrderCampaignItems($("#orderDate").value||today());
+  loadOrderCampaignItems($("#orderDate")?.value||today()).catch(err=>console.error("Campanhas:",err));
 }
 
 
 async function loadOrderCampaignItems(dateStr){
-  if(!user||profile?.role!=="rep")return;
-  const {data:goals,error}=await sb.from("item_goals")
-    .select("*")
-    .eq("active",true)
-    .lte("start_date",dateStr)
-    .gte("end_date",dateStr)
-    .order("item_name");
-  if(error){
-    $("#orderCampaignStatus").textContent="Erro";
-    $("#orderCampaignItems").innerHTML=`<div class="muted">${error.message}</div>`;
+  const status=$("#orderCampaignStatus");
+  const container=$("#orderCampaignItems");
+  if(!status||!container)return;
+
+  if(!user||profile?.role!=="rep"){
+    status.textContent="Indisponível";
+    container.innerHTML='<div class="muted">Campanhas disponíveis apenas para o perfil Representante.</div>';
     return;
   }
 
-  orderCampaignGoalCache=(goals||[]).filter(g=>!g.assigned_user_id||g.assigned_user_id===user.id);
-  $("#orderCampaignStatus").textContent=orderCampaignGoalCache.length?`${orderCampaignGoalCache.length} em campanha`:"Sem campanhas";
-  $("#orderCampaignItems").innerHTML=orderCampaignGoalCache.length?orderCampaignGoalCache.map(g=>`
-    <div class="campaign-order-item" data-campaign-goal="${g.id}">
-      <div class="campaign-item-title">
-        <strong>${g.item_name}</strong>
-        <small>Meta: ${Number(g.target_quantity||0)} un.</small>
-      </div>
-      <div>
-        <label>Vendeu este item?</label>
-        <select class="campaign-sold-select">
-          <option value="no">Não</option>
-          <option value="yes">Sim</option>
-        </select>
-      </div>
-      <div class="campaign-qty-wrap hidden">
-        <label>Quantidade</label>
-        <input class="campaign-qty" type="number" min="1" step="1" placeholder="0">
-      </div>
-      <div class="campaign-commission-wrap hidden">
-        <label>Está pagando comissão?</label>
-        <select class="campaign-commission-select">
-          <option value="no">Não</option>
-          <option value="yes">Sim</option>
-        </select>
-      </div>
-      <div class="campaign-commission-value-wrap hidden">
-        <label>Valor da comissão</label>
-        <input class="campaign-commission-value money-input" type="text" inputmode="numeric" placeholder="R$ 0,00">
-      </div>
-    </div>`).join("")
-    :'<div class="muted">Nenhum item em campanha para esta data.</div>';
+  const effectiveDate=dateStr||$("#orderDate")?.value||today();
+  status.textContent="Carregando…";
+  container.innerHTML='<div class="muted">Buscando os itens em campanha...</div>';
 
-  document.querySelectorAll("#orderCampaignItems .campaign-order-item").forEach(box=>{
-    const sold=box.querySelector(".campaign-sold-select");
-    const qtyWrap=box.querySelector(".campaign-qty-wrap");
-    const commissionWrap=box.querySelector(".campaign-commission-wrap");
-    const commission=box.querySelector(".campaign-commission-select");
-    const commissionValueWrap=box.querySelector(".campaign-commission-value-wrap");
+  try{
+    const {data:goals,error}=await sb.from("item_goals")
+      .select("id,item_name,target_quantity,start_date,end_date,active,assigned_user_id")
+      .eq("active",true)
+      .lte("start_date",effectiveDate)
+      .gte("end_date",effectiveDate)
+      .or(`assigned_user_id.is.null,assigned_user_id.eq.${user.id}`)
+      .order("item_name");
 
-    sold.addEventListener("change",()=>{
-      const yes=sold.value==="yes";
-      qtyWrap.classList.toggle("hidden",!yes);
-      commissionWrap.classList.toggle("hidden",!yes);
-      if(!yes){
-        box.querySelector(".campaign-qty").value="";
-        commission.value="no";
-        commissionValueWrap.classList.add("hidden");
-        box.querySelector(".campaign-commission-value").value="";
-      }
+    if(error)throw error;
+
+    orderCampaignGoalCache=goals||[];
+    status.textContent=orderCampaignGoalCache.length?`${orderCampaignGoalCache.length} em campanha`:"Sem campanhas";
+
+    container.innerHTML=orderCampaignGoalCache.length?orderCampaignGoalCache.map(g=>`
+      <div class="campaign-order-item" data-campaign-goal="${g.id}">
+        <div class="campaign-item-title">
+          <strong>${g.item_name}</strong>
+          <small>Meta: ${Number(g.target_quantity||0)} un.</small>
+        </div>
+        <div>
+          <label>Vendeu este item?</label>
+          <select class="campaign-sold-select">
+            <option value="no">Não</option>
+            <option value="yes">Sim</option>
+          </select>
+        </div>
+        <div class="campaign-qty-wrap hidden">
+          <label>Quantidade</label>
+          <input class="campaign-qty" type="number" min="1" step="1" placeholder="0">
+        </div>
+        <div class="campaign-commission-wrap hidden">
+          <label>Está pagando comissão?</label>
+          <select class="campaign-commission-select">
+            <option value="no">Não</option>
+            <option value="yes">Sim</option>
+          </select>
+        </div>
+        <div class="campaign-commission-value-wrap hidden">
+          <label>Valor da comissão</label>
+          <input class="campaign-commission-value money-input" type="text" inputmode="numeric" placeholder="R$ 0,00">
+        </div>
+      </div>`).join("")
+      :`<div class="muted">Nenhum item em campanha para ${effectiveDate.split("-").reverse().join("/")}.</div>`;
+
+    document.querySelectorAll("#orderCampaignItems .campaign-order-item").forEach(box=>{
+      const sold=box.querySelector(".campaign-sold-select");
+      const qtyWrap=box.querySelector(".campaign-qty-wrap");
+      const commissionWrap=box.querySelector(".campaign-commission-wrap");
+      const commission=box.querySelector(".campaign-commission-select");
+      const commissionValueWrap=box.querySelector(".campaign-commission-value-wrap");
+
+      sold?.addEventListener("change",()=>{
+        const yes=sold.value==="yes";
+        qtyWrap?.classList.toggle("hidden",!yes);
+        commissionWrap?.classList.toggle("hidden",!yes);
+        if(!yes){
+          const qty=box.querySelector(".campaign-qty");
+          const cval=box.querySelector(".campaign-commission-value");
+          if(qty)qty.value="";
+          if(commission)commission.value="no";
+          commissionValueWrap?.classList.add("hidden");
+          if(cval)cval.value="";
+        }
+      });
+
+      commission?.addEventListener("change",()=>{
+        commissionValueWrap?.classList.toggle("hidden",commission.value!=="yes");
+        if(commission.value!=="yes"){
+          const cval=box.querySelector(".campaign-commission-value");
+          if(cval)cval.value="";
+        }
+      });
     });
-    commission.addEventListener("change",()=>{
-      commissionValueWrap.classList.toggle("hidden",commission.value!=="yes");
-      if(commission.value!=="yes")box.querySelector(".campaign-commission-value").value="";
-    });
-  });
-  bindMoneyInputs($("#orderCampaignItems"));
+
+    bindMoneyInputs(container);
+  }catch(err){
+    console.error("Erro ao carregar campanhas:",err);
+    status.textContent="Erro ao carregar";
+    container.innerHTML=`<div class="data-conflict-inline">
+      <strong>Não foi possível carregar os itens da campanha.</strong>
+      <span>${err?.message||"Tente atualizar as campanhas."}</span>
+    </div>`;
+  }
 }
 
 function collectOrderCampaignItems(){
   const rows=[];
+  if($("#orderCampaignStatus")?.textContent==="Carregando…"){
+    return {ok:false,message:"Aguarde os itens da campanha terminarem de carregar."};
+  }
+  if($("#orderCampaignStatus")?.textContent==="Erro ao carregar"){
+    return {ok:false,message:"Os itens da campanha não foram carregados. Clique em Atualizar campanhas e tente novamente."};
+  }
   for(const box of document.querySelectorAll("#orderCampaignItems .campaign-order-item")){
     if(box.querySelector(".campaign-sold-select").value!=="yes")continue;
     const goalId=Number(box.dataset.campaignGoal||0);
@@ -961,6 +1000,7 @@ function collectOrderCampaignItems(){
 }
 
 $("#orderDate")?.addEventListener("change",()=>loadOrderCampaignItems($("#orderDate").value||today()));
+$("#reloadCampaignBtn")?.addEventListener("click",()=>loadOrderCampaignItems($("#orderDate")?.value||today()));
 
 $("#repApplyFilterBtn")?.addEventListener("click",async()=>{
   const {start,end}=repSalesRange();
