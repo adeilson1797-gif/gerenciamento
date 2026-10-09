@@ -577,3 +577,11 @@ Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do 
 - Restaurado o **Ranking por CNPJ** no painel do representante.
 - O ranking usa os pedidos do período selecionado e ordena os clientes pelo maior valor vendido.
 - Mantida paginação de 10 posições por página.
+
+
+## v6.1.2 — Estabilização do painel de vendas
+- A contagem dos itens da campanha foi isolada do carregamento das vendas.
+- Se a contagem da campanha falhar, vendas, totais, pedidos e distribuidores continuam funcionando normalmente.
+- A contagem usa somente consultas de leitura em `order_campaign_items`; não grava, altera ou exclui vendas.
+- O Ranking por CNPJ também foi isolado para que qualquer falha visual nele não interrompa o restante do painel.
+- Nenhuma mudança de banco de dados é necessária nesta correção.

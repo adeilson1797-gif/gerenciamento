@@ -822,15 +822,23 @@ async function loadRep(){
 
   await loadRepDistributorSummary();
   await loadRepOrders();
-  await loadRepCampaignProgress();
   ensureTableExportButtons("#repView");
   enableAutomaticTablePagination();
   maybeCelebrateMonthlyGoal(monthlyTotal,target);
+
+  // Contagem de campanha é apenas leitura e não interfere no carregamento das vendas.
+  loadRepCampaignProgress().catch(err=>{
+    console.error("Contagem de campanhas:",err);
+    const status=$("#repItemGoalStatus");
+    if(status)status.textContent="Erro";
+    setMsg($("#repItemGoalsMsg"),"Não foi possível atualizar a contagem das campanhas. As vendas permanecem carregadas normalmente.");
+  });
 }
 
 
 async function loadRepCampaignProgress(){
   if(!user||profile?.role!=="rep")return;
+
   const status=$("#repItemGoalStatus");
   const table=$("#repItemGoalCountTable");
   if(!status||!table)return;
@@ -839,73 +847,77 @@ async function loadRepCampaignProgress(){
   setMsg($("#repItemGoalsMsg"),"");
 
   const refDate=$("#orderDate")?.value||today();
-  const {data:goals,error:gErr}=await sb.from("item_goals")
-    .select("id,item_name,target_quantity,start_date,end_date,active,assigned_user_id")
-    .eq("active",true)
-    .lte("start_date",refDate)
-    .gte("end_date",refDate)
-    .or(`assigned_user_id.is.null,assigned_user_id.eq.${user.id}`)
-    .order("item_name");
 
-  if(gErr){
+  try{
+    const {data:goals,error:gErr}=await sb.from("item_goals")
+      .select("id,item_name,target_quantity,start_date,end_date,active,assigned_user_id")
+      .eq("active",true)
+      .lte("start_date",refDate)
+      .gte("end_date",refDate)
+      .or(`assigned_user_id.is.null,assigned_user_id.eq.${user.id}`)
+      .order("item_name");
+    if(gErr)throw gErr;
+
+    const myGoals=goals||[];
+    if(!myGoals.length){
+      $("#repCampaignGoalCount").textContent="0";
+      $("#repCampaignSoldCount").textContent="0";
+      $("#repCampaignHitCount").textContent="0";
+      status.textContent="Sem campanhas";
+      table.innerHTML='<tr><td colspan="5">Nenhum item em campanha para esta data.</td></tr>';
+      return;
+    }
+
+    const ids=myGoals.map(g=>g.id);
+    const minStart=myGoals.reduce((m,g)=>!m||g.start_date<m?g.start_date:m,null);
+    const maxEnd=myGoals.reduce((m,g)=>!m||g.end_date>m?g.end_date:m,null);
+
+    const {data:campaignRows,error:cErr}=await sb.from("order_campaign_items")
+      .select("goal_id,quantity,report_date")
+      .eq("user_id",user.id)
+      .in("goal_id",ids)
+      .gte("report_date",minStart)
+      .lte("report_date",maxEnd);
+    if(cErr)throw cErr;
+
+    const rows=myGoals.map(goal=>{
+      const target=Number(goal.target_quantity||0);
+      const sold=(campaignRows||[])
+        .filter(r=>r.goal_id===goal.id)
+        .reduce((sum,r)=>sum+Number(r.quantity||0),0);
+      const pct=target>0?sold/target:0;
+      return {
+        item:goal.item_name,
+        target,
+        sold,
+        remaining:Math.max(target-sold,0),
+        pct
+      };
+    }).sort((a,b)=>b.pct-a.pct||b.sold-a.sold||a.item.localeCompare(b.item));
+
+    const totalSold=rows.reduce((s,r)=>s+r.sold,0);
+    const hitCount=rows.filter(r=>r.target>0&&r.sold>=r.target).length;
+
+    $("#repCampaignGoalCount").textContent=String(rows.length);
+    $("#repCampaignSoldCount").textContent=String(totalSold);
+    $("#repCampaignHitCount").textContent=String(hitCount);
+    status.textContent=`${rows.length} item(ns)`;
+
+    table.innerHTML=rows.map(r=>`<tr>
+      <td><strong>${r.item}</strong></td>
+      <td>${r.target} un.</td>
+      <td>${r.sold} un.</td>
+      <td>${r.remaining} un.</td>
+      <td><strong>${percent(r.pct)}</strong><div class="progress-mini"><i style="width:${Math.min(r.pct*100,100)}%"></i></div></td>
+    </tr>`).join("");
+
+    paginateTableBody(table,1);
+  }catch(err){
+    console.error("Erro na contagem das campanhas:",err);
     status.textContent="Erro";
-    table.innerHTML='<tr><td colspan="5">Não foi possível carregar as campanhas.</td></tr>';
-    return setMsg($("#repItemGoalsMsg"),gErr.message);
+    table.innerHTML='<tr><td colspan="5">A contagem das campanhas não pôde ser carregada.</td></tr>';
+    setMsg($("#repItemGoalsMsg"),"Erro ao carregar a contagem das campanhas. Isso não altera nem bloqueia os dados de vendas.");
   }
-
-  const myGoals=goals||[];
-  if(!myGoals.length){
-    $("#repCampaignGoalCount").textContent="0";
-    $("#repCampaignSoldCount").textContent="0";
-    $("#repCampaignHitCount").textContent="0";
-    status.textContent="Sem campanhas";
-    table.innerHTML='<tr><td colspan="5">Nenhum item em campanha para esta data.</td></tr>';
-    return;
-  }
-
-  const ids=myGoals.map(g=>g.id);
-  const minStart=myGoals.reduce((m,g)=>!m||g.start_date<m?g.start_date:m,null);
-  const maxEnd=myGoals.reduce((m,g)=>!m||g.end_date>m?g.end_date:m,null);
-  const {data:reports,error:rErr}=await sb.from("item_goal_reports")
-    .select("goal_id,quantity,report_date")
-    .eq("user_id",user.id)
-    .in("goal_id",ids)
-    .gte("report_date",minStart)
-    .lte("report_date",maxEnd);
-
-  if(rErr){
-    status.textContent="Erro";
-    table.innerHTML='<tr><td colspan="5">Não foi possível carregar o realizado das campanhas.</td></tr>';
-    return setMsg($("#repItemGoalsMsg"),rErr.message);
-  }
-
-  const rows=myGoals.map(goal=>{
-    const target=Number(goal.target_quantity||0);
-    const sold=(reports||[]).filter(r=>r.goal_id===goal.id).reduce((sum,r)=>sum+Number(r.quantity||0),0);
-    const pct=target>0?sold/target:0;
-    return {
-      item:goal.item_name,
-      target,
-      sold,
-      remaining:Math.max(target-sold,0),
-      pct
-    };
-  }).sort((a,b)=>b.pct-a.pct||b.sold-a.sold||a.item.localeCompare(b.item));
-
-  const totalSold=rows.reduce((s,r)=>s+r.sold,0);
-  const hitCount=rows.filter(r=>r.target>0&&r.sold>=r.target).length;
-  $("#repCampaignGoalCount").textContent=String(rows.length);
-  $("#repCampaignSoldCount").textContent=String(totalSold);
-  $("#repCampaignHitCount").textContent=String(hitCount);
-  status.textContent=`${rows.length} item(ns)`;
-
-  table.innerHTML=rows.map(r=>`<tr>
-    <td><strong>${r.item}</strong></td>
-    <td>${r.target} un.</td>
-    <td>${r.sold} un.</td>
-    <td>${r.remaining} un.</td>
-    <td><strong>${percent(r.pct)}</strong><div class="progress-mini"><i style="width:${Math.min(r.pct*100,100)}%"></i></div></td>
-  </tr>`).join("");
 }
 
 async function loadRepOrders(){
@@ -984,7 +996,7 @@ async function loadRepOrders(){
   $("#repSkuOrders").textContent=String(repOrdersCache.length);
   $("#repSkuAverage").textContent=repOrdersCache.length?(skuTotal/repOrdersCache.length).toFixed(1).replace(".",","):"0,0";
 
-  renderRepCnpjRanking();
+  try{ renderRepCnpjRanking(); }catch(err){ console.error("Ranking CNPJ:",err); }
   renderCurrentOrderConflicts();
   loadOrderCampaignItems($("#orderDate")?.value||today()).catch(err=>console.error("Campanhas:",err));
 }
