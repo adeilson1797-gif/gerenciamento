@@ -822,9 +822,90 @@ async function loadRep(){
 
   await loadRepDistributorSummary();
   await loadRepOrders();
+  await loadRepCampaignProgress();
   ensureTableExportButtons("#repView");
   enableAutomaticTablePagination();
   maybeCelebrateMonthlyGoal(monthlyTotal,target);
+}
+
+
+async function loadRepCampaignProgress(){
+  if(!user||profile?.role!=="rep")return;
+  const status=$("#repItemGoalStatus");
+  const table=$("#repItemGoalCountTable");
+  if(!status||!table)return;
+
+  status.textContent="Carregando…";
+  setMsg($("#repItemGoalsMsg"),"");
+
+  const refDate=$("#orderDate")?.value||today();
+  const {data:goals,error:gErr}=await sb.from("item_goals")
+    .select("id,item_name,target_quantity,start_date,end_date,active,assigned_user_id")
+    .eq("active",true)
+    .lte("start_date",refDate)
+    .gte("end_date",refDate)
+    .or(`assigned_user_id.is.null,assigned_user_id.eq.${user.id}`)
+    .order("item_name");
+
+  if(gErr){
+    status.textContent="Erro";
+    table.innerHTML='<tr><td colspan="5">Não foi possível carregar as campanhas.</td></tr>';
+    return setMsg($("#repItemGoalsMsg"),gErr.message);
+  }
+
+  const myGoals=goals||[];
+  if(!myGoals.length){
+    $("#repCampaignGoalCount").textContent="0";
+    $("#repCampaignSoldCount").textContent="0";
+    $("#repCampaignHitCount").textContent="0";
+    status.textContent="Sem campanhas";
+    table.innerHTML='<tr><td colspan="5">Nenhum item em campanha para esta data.</td></tr>';
+    return;
+  }
+
+  const ids=myGoals.map(g=>g.id);
+  const minStart=myGoals.reduce((m,g)=>!m||g.start_date<m?g.start_date:m,null);
+  const maxEnd=myGoals.reduce((m,g)=>!m||g.end_date>m?g.end_date:m,null);
+  const {data:reports,error:rErr}=await sb.from("item_goal_reports")
+    .select("goal_id,quantity,report_date")
+    .eq("user_id",user.id)
+    .in("goal_id",ids)
+    .gte("report_date",minStart)
+    .lte("report_date",maxEnd);
+
+  if(rErr){
+    status.textContent="Erro";
+    table.innerHTML='<tr><td colspan="5">Não foi possível carregar o realizado das campanhas.</td></tr>';
+    return setMsg($("#repItemGoalsMsg"),rErr.message);
+  }
+
+  const rows=myGoals.map(goal=>{
+    const target=Number(goal.target_quantity||0);
+    const sold=(reports||[]).filter(r=>r.goal_id===goal.id).reduce((sum,r)=>sum+Number(r.quantity||0),0);
+    const pct=target>0?sold/target:0;
+    return {
+      item:goal.item_name,
+      target,
+      sold,
+      remaining:Math.max(target-sold,0),
+      pct
+    };
+  }).sort((a,b)=>b.pct-a.pct||b.sold-a.sold||a.item.localeCompare(b.item));
+
+  const totalSold=rows.reduce((s,r)=>s+r.sold,0);
+  const hitCount=rows.filter(r=>r.target>0&&r.sold>=r.target).length;
+  $("#repCampaignGoalCount").textContent=String(rows.length);
+  $("#repCampaignSoldCount").textContent=String(totalSold);
+  $("#repCampaignHitCount").textContent=String(hitCount);
+  status.textContent=`${rows.length} item(ns)`;
+
+  table.innerHTML=rows.map(r=>`<tr>
+    <td><strong>${r.item}</strong></td>
+    <td>${r.target} un.</td>
+    <td>${r.sold} un.</td>
+    <td>${r.remaining} un.</td>
+    <td><strong>${percent(r.pct)}</strong><div class="progress-mini"><i style="width:${Math.min(r.pct*100,100)}%"></i></div></td>
+  </tr>`).join("");
 }
 
 async function loadRepOrders(){
@@ -1037,7 +1118,10 @@ function collectOrderCampaignItems(){
   return {ok:true,rows};
 }
 
-$("#orderDate")?.addEventListener("change",()=>loadOrderCampaignItems($("#orderDate").value||today()));
+$("#orderDate")?.addEventListener("change",async()=>{
+  await loadOrderCampaignItems($("#orderDate").value||today());
+  await loadRepCampaignProgress();
+});
 $("#reloadCampaignBtn")?.addEventListener("click",()=>loadOrderCampaignItems($("#orderDate")?.value||today()));
 
 $("#repApplyFilterBtn")?.addEventListener("click",async()=>{
@@ -1051,6 +1135,41 @@ $("#repResetFilterBtn")?.addEventListener("click",async()=>{
   await loadRep();
 });
 
+
+
+function renderRepCnpjRanking(){
+  const table=$("#repCnpjRankingTable");
+  if(!table)return;
+
+  const grouped={};
+  (repOrdersCache||[]).forEach(o=>{
+    const cnpj=normalizeCNPJ(o.cnpj);
+    const key=cnpj||String(o.legal_name||"").trim().toUpperCase();
+    if(!key)return;
+    grouped[key]||={
+      cnpj,
+      legal_name:o.legal_name||"Cliente",
+      orders:0,
+      total:0
+    };
+    grouped[key].orders+=1;
+    grouped[key].total+=Number(o.amount||0);
+    if(o.legal_name)grouped[key].legal_name=o.legal_name;
+  });
+
+  const rows=Object.values(grouped)
+    .sort((a,b)=>b.total-a.total||b.orders-a.orders||a.legal_name.localeCompare(b.legal_name));
+
+  table.innerHTML=rows.map((r,i)=>`<tr>
+    <td><span class="rank-badge">${i+1}º</span></td>
+    <td>${r.cnpj?`<span class="cnpj-chip">${formatCNPJ(r.cnpj)}</span>`:"—"}</td>
+    <td><strong>${r.legal_name}</strong></td>
+    <td>${r.orders}</td>
+    <td><strong>${money(r.total)}</strong></td>
+  </tr>`).join("")||`<tr><td colspan="5">Nenhum cliente com pedido no período selecionado.</td></tr>`;
+
+  paginateTableBody(table,1);
+}
 
 function renderCurrentOrderConflicts(){
   const conflicts=(repOrdersCache||[]).map(o=>({order:o,conflict:findBaseConflict(o.cnpj,o.legal_name)})).filter(x=>x.conflict);

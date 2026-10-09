@@ -563,3 +563,17 @@ Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do 
 - Quando o representante atinge a meta mensal, o painel exibe uma animação de parabéns.
 - A comemoração é exibida uma vez por mês por dispositivo/navegador.
 - O cálculo usa o total mensal completo, independentemente do filtro de datas aplicado na tela.
+
+
+## v6.1.1 — Contagem das campanhas e Ranking por CNPJ no Representante
+
+- Restaurada a **Contagem dos itens da campanha** no painel do representante.
+- A contagem agora é somente leitura e é alimentada automaticamente pelos itens informados dentro dos pedidos.
+- Mostra:
+  - quantidade de itens em campanha;
+  - total de unidades realizadas;
+  - quantidade de metas já atingidas;
+  - meta, realizado, falta e percentual por item.
+- Restaurado o **Ranking por CNPJ** no painel do representante.
+- O ranking usa os pedidos do período selecionado e ordena os clientes pelo maior valor vendido.
+- Mantida paginação de 10 posições por página.

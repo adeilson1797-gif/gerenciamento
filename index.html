@@ -273,24 +273,20 @@
           <div class="mini-kpi"><span>Média SKUs/pedido</span><strong id="repSkuAverage">0,0</strong></div>
         </div>
       </div>
-      <div id="repItemGoalsCard" class="card item-goals-card hidden">
+      <div id="repItemGoalsCard" class="card item-goals-card">
         <div class="section-head">
           <div>
-            <h2>Minhas metas por item</h2>
-            <p class="muted">Veja a meta definida para cada produto, acompanhe o realizado e informe diariamente se vendeu o item.</p>
+            <h2>Contagem dos itens da campanha</h2>
+            <p class="muted">Acompanhe automaticamente o resultado dos itens vendidos nos pedidos. Não é necessário lançar novamente nesta área.</p>
           </div>
           <span id="repItemGoalStatus" class="role-badge">Carregando…</span>
         </div>
-        <div class="goal-date-row">
-          <div>
-            <label>Data da informação</label>
-            <input id="saleDate" type="date" required>
-          </div>
-          <button id="saveItemGoalsBtn" class="btn btn-primary" type="button">Salvar informações dos itens</button>
+        <div class="grid grid-3 mini-grid campaign-count-kpis">
+          <div class="mini-kpi"><span>Itens em campanha</span><strong id="repCampaignGoalCount">0</strong></div>
+          <div class="mini-kpi"><span>Unidades realizadas</span><strong id="repCampaignSoldCount">0</strong></div>
+          <div class="mini-kpi"><span>Metas atingidas</span><strong id="repCampaignHitCount">0</strong></div>
         </div>
-        <div id="repItemGoals" class="goal-report-grid"></div>
         <div class="goal-count-summary">
-          <h3>Contagem das minhas metas por item</h3>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Item</th><th>Meta</th><th>Realizado</th><th>Falta</th><th>% atingido</th></tr></thead>
@@ -322,7 +318,7 @@
         <div class="section-head">
           <div>
             <h2>Ranking por CNPJ</h2>
-            <p class="muted">Clientes ordenados pelo total de pedidos no mês.</p>
+            <p class="muted">Clientes ordenados pelo total vendido no período selecionado.</p>
           </div>
         </div>
         <div class="table-wrap">

@@ -499,3 +499,8 @@ th,td{padding:12px 13px}
   .commission-filters .compact-input{min-width:0;width:100%}
   .goal-celebration-card{padding:26px 18px}
 }
+
+/* v6.1.1 — contagem de campanhas e ranking CNPJ no representante */
+.campaign-count-kpis{margin-top:12px}
+#repItemGoalsCard .goal-count-summary{margin-top:10px}
+#repCnpjRankingCard{display:block}
