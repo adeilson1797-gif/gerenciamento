@@ -589,3 +589,31 @@ Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do 
 
 ## v6.1.3 — Correção do seletor de distribuidoras
 As distribuidoras ativas agora carregam antes e de forma independente das campanhas, evitando que uma falha em campanhas deixe o seletor vazio.
+
+
+## v6.2 — Alertas automáticos de novas vendas por e-mail
+- Após um representante salvar um novo pedido, o SAPECE chama a Edge Function `notify-sale-email`.
+- Destinatários:
+  - adeilson.repre@gmail.com
+  - adjanmca@gmail.com
+- O e-mail contém representante, data, cliente, CNPJ, distribuidora, pedido, valor, SKUs e itens de campanha/comissão.
+- O envio é independente do salvamento da venda: se o e-mail falhar, o pedido continua salvo.
+- Para ativar o envio real, configure `RESEND_API_KEY` no Supabase.
+- Recomendado verificar `sapece.com.br` no Resend e configurar `SAPECE_ALERT_FROM` como `SAPECE <alertas@sapece.com.br>`.
+
+
+## v6.2.1 — Remetente suporte.sapece@gmail.com
+- A Edge Function `notify-sale-email` foi atualizada para usar o serviço Brevo.
+- Remetente configurado no código: `suporte.sapece@gmail.com`
+- Nome do remetente: `SAPECE`
+- Destinatários:
+  - `adeilson.repre@gmail.com`
+  - `adjanmca@gmail.com`
+- O envio continua independente do salvamento do pedido.
+- Para ativar o envio real, é necessário:
+  1. cadastrar/verificar `suporte.sapece@gmail.com` como remetente no Brevo;
+  2. criar uma chave de API no Brevo;
+  3. adicionar no Supabase o segredo `BREVO_API_KEY`.
+- Variáveis opcionais:
+  - `SAPECE_ALERT_FROM_EMAIL` (padrão: suporte.sapece@gmail.com)
+  - `SAPECE_ALERT_FROM_NAME` (padrão: SAPECE)

@@ -128,6 +128,19 @@ function bindMoneyInput(el){
   });
 }
 
+
+async function notifySaleByEmail(orderId){
+  if(!orderId)return;
+  try{
+    const {error}=await sb.functions.invoke("notify-sale-email",{
+      body:{order_id:Number(orderId)}
+    });
+    if(error)console.error("Alerta de venda por e-mail:",error);
+  }catch(err){
+    console.error("Alerta de venda por e-mail:",err);
+  }
+}
+
 function bindMoneyInputs(root=document){
   root.querySelectorAll(".money-input").forEach(bindMoneyInput);
 }
@@ -1312,6 +1325,10 @@ $("#orderForm")?.addEventListener("submit",async e=>{
       return setMsg($("#orderMsg"),`Não foi possível salvar os itens da campanha: ${campaignError.message}`);
     }
   }
+
+  // O alerta é independente do salvamento: se o serviço de e-mail estiver indisponível,
+  // o pedido continua salvo normalmente.
+  notifySaleByEmail(savedOrder.id);
 
   setMsg($("#orderMsg"),"Pedido salvo com SKUs e campanhas atualizados.","ok");
   $("#orderAmount").value="";
