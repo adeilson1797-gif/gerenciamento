@@ -930,31 +930,40 @@ async function loadRepOrders(){
     {data:orders,error:oErr},
     {data:distributors,error:dErr},
     {data:baseClients,error:bErr}
-  ] = await Promise.all([
+  ]=await Promise.all([
     sb.from("customers").select("*").eq("user_id",user.id).order("legal_name"),
     sb.from("sales_orders").select("*").eq("user_id",user.id).gte("order_date",start).lte("order_date",end).order("order_date",{ascending:false}),
-    sb.from("distributors").select("*").eq("active",true).order("name"),
+    sb.from("distributors").select("id,name,active").eq("active",true).order("name"),
     sb.from("client_base").select("*").eq("user_id",user.id).eq("active",true).order("legal_name")
   ]);
 
   if(cErr||oErr||dErr||bErr){
-    setMsg($("#orderMsg"),(cErr||oErr||dErr||bErr).message);
-    return;
+    console.error(cErr||oErr||dErr||bErr);
+    return setMsg($("#orderMsg"),(cErr||oErr||dErr||bErr).message);
   }
 
   repCustomersCache=customers||[];
   repOrdersCache=orders||[];
   clientBaseCache=baseClients||[];
 
-  const orderIds=repOrdersCache.map(o=>o.id);
+  const activeDistributors=distributors||[];
+  $("#orderDistributor").innerHTML='<option value="">Selecione...</option>'+activeDistributors.map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
+  repOrderDistributorMap=Object.fromEntries(activeDistributors.map(d=>[String(d.id),d.name]));
+
+  const orderClients=clientBaseCache.length?clientBaseCache:repCustomersCache;
+  $("#customerCnpjList").innerHTML=orderClients.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${c.legal_name}</option>`).join("");
+  $("#customerNameList").innerHTML=orderClients.map(c=>`<option value="${c.legal_name}">${formatCNPJ(c.cnpj)}</option>`).join("");
+
   let campaignRows=[];
-  if(orderIds.length){
-    const {data,error}=await sb.from("order_campaign_items")
-      .select("*")
-      .eq("user_id",user.id)
-      .in("order_id",orderIds);
-    if(error)return setMsg($("#orderMsg"),error.message);
-    campaignRows=data||[];
+  try{
+    const orderIds=repOrdersCache.map(o=>o.id);
+    if(orderIds.length){
+      const {data,error}=await sb.from("order_campaign_items").select("*").eq("user_id",user.id).in("order_id",orderIds);
+      if(error)throw error;
+      campaignRows=data||[];
+    }
+  }catch(err){
+    console.error("Histórico de campanhas:",err);
   }
 
   repOrderCampaignMap={};
@@ -962,14 +971,6 @@ async function loadRepOrders(){
     repOrderCampaignMap[String(row.order_id)]||=[];
     repOrderCampaignMap[String(row.order_id)].push(row);
   });
-
-  const orderClients=clientBaseCache.length?clientBaseCache:repCustomersCache;
-  $("#customerCnpjList").innerHTML=orderClients.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${c.legal_name}</option>`).join("");
-  $("#customerNameList").innerHTML=orderClients.map(c=>`<option value="${c.legal_name}">${formatCNPJ(c.cnpj)}</option>`).join("");
-  $("#orderDistributor").innerHTML='<option value="">Selecione...</option>'+(distributors||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
-
-  const distNames=Object.fromEntries((distributors||[]).map(d=>[String(d.id),d.name]));
-  repOrderDistributorMap=distNames;
 
   $("#repOrdersTable").innerHTML=repOrdersCache.map(o=>{
     const campaign=repOrderCampaignMap[String(o.id)]||[];
@@ -981,7 +982,7 @@ async function loadRepOrders(){
       <td>${o.legal_name}</td>
       <td>${o.city||"—"}</td>
       <td>${o.state||"—"}</td>
-      <td>${distNames[String(o.distributor_id)]||"Distribuidora"}</td>
+      <td>${repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora"}</td>
       <td>${o.order_number}</td>
       <td><strong>${Number(o.sku_count||0)}</strong></td>
       <td>${campaign.length?`${campaign.length} item(ns) • ${campaignQty} un.`:"—"}</td>
@@ -996,11 +997,10 @@ async function loadRepOrders(){
   $("#repSkuOrders").textContent=String(repOrdersCache.length);
   $("#repSkuAverage").textContent=repOrdersCache.length?(skuTotal/repOrdersCache.length).toFixed(1).replace(".",","):"0,0";
 
-  try{ renderRepCnpjRanking(); }catch(err){ console.error("Ranking CNPJ:",err); }
+  try{renderRepCnpjRanking();}catch(err){console.error("Ranking CNPJ:",err);}
   renderCurrentOrderConflicts();
   loadOrderCampaignItems($("#orderDate")?.value||today()).catch(err=>console.error("Campanhas:",err));
 }
-
 
 async function loadOrderCampaignItems(dateStr){
   const status=$("#orderCampaignStatus");

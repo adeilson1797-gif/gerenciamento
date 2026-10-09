@@ -585,3 +585,7 @@ Para publicar, envie **todos os 10 arquivos** presentes neste pacote à raiz do 
 - A contagem usa somente consultas de leitura em `order_campaign_items`; não grava, altera ou exclui vendas.
 - O Ranking por CNPJ também foi isolado para que qualquer falha visual nele não interrompa o restante do painel.
 - Nenhuma mudança de banco de dados é necessária nesta correção.
+
+
+## v6.1.3 — Correção do seletor de distribuidoras
+As distribuidoras ativas agora carregam antes e de forma independente das campanhas, evitando que uma falha em campanhas deixe o seletor vazio.
