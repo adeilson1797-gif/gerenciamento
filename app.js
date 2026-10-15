@@ -110,6 +110,27 @@ function parseLooseBRL(value){
   return Number.isFinite(n)?n:0;
 }
 
+// v6.3.1 — padronização: textos digitados em cadastros e pedidos ficam em CAIXA ALTA.
+function forceUppercaseField(el){
+  if(!el)return;
+  const tag=el.tagName;
+  if(tag!=="INPUT"&&tag!=="TEXTAREA")return;
+  const type=String(el.type||"text").toLowerCase();
+  if(["email","password","number","date","month","time","datetime-local","checkbox","radio","file","hidden","button","submit","reset","range","color"].includes(type))return;
+  if(el.classList?.contains("money-input"))return;
+  const start=typeof el.selectionStart==="number"?el.selectionStart:null;
+  const end=typeof el.selectionEnd==="number"?el.selectionEnd:null;
+  const upper=String(el.value||"").toLocaleUpperCase("pt-BR");
+  if(el.value!==upper){
+    el.value=upper;
+    if(start!==null&&end!==null){try{el.setSelectionRange(start,end);}catch(_){}}
+  }
+}
+
+document.addEventListener("input",e=>forceUppercaseField(e.target),true);
+document.addEventListener("change",e=>forceUppercaseField(e.target),true);
+document.addEventListener("blur",e=>forceUppercaseField(e.target),true);
+
 function bindMoneyInput(el){
   if(!el || el.dataset.moneyBound==="1") return;
   el.dataset.moneyBound="1";
@@ -1772,6 +1793,7 @@ async function loadAdmin(){
     {data:distributors,error:dErr},
     {data:salesDistributors,error:sdErr},
     {data:orders,error:oErr},
+    {data:allOrders,error:aoErr},
     {data:customers,error:cErr},
     {data:orderCampaignItems,error:ociErr}
   ]=await Promise.all([
@@ -1783,10 +1805,11 @@ async function loadAdmin(){
     sb.from("distributors").select("*").order("name"),
     sb.from("daily_sales_distributors").select("*").gte("sale_date",start).lte("sale_date",end),
     sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end).not("finalized_at","is",null),
+    sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end),
     sb.from("customers").select("*"),
     sb.from("order_campaign_items").select("*").gte("report_date",start).lte("report_date",end)
   ]);
-  if(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||cErr||ociErr){console.error(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||cErr||ociErr);return;}
+  if(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr){console.error(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr);return;}
   const allProfiles=profiles||[];
   const reps=allProfiles.filter(r=>r.role==="rep"&&r.active), map={};
   const goalRep=$("#goalRep");
@@ -1879,7 +1902,9 @@ async function loadAdmin(){
   </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
   const finalizedOrderIds=new Set((orders||[]).map(o=>String(o.id)));
   const finalizedCampaignItems=(orderCampaignItems||[]).filter(i=>finalizedOrderIds.has(String(i.order_id)));
-  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[],orders:orders||[],customers:customers||[],orderCampaignItems:finalizedCampaignItems};
+  // Vendas gerenciais continuam considerando apenas pedidos finalizados.
+  // A guia Comissão preserva todo o histórico já informado, inclusive pedidos do dia ainda em standby.
+  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[],orders:orders||[],allOrders:allOrders||[],customers:customers||[],orderCampaignItems:finalizedCampaignItems,allOrderCampaignItems:orderCampaignItems||[]};
   renderAdminSalesHistory();
   renderUserManagement();
   renderItemGoalsManager();
@@ -2371,14 +2396,14 @@ window.deleteManagerOrder=async(orderId,orderNumber,clientName,amount)=>{
 };
 
 function commissionRowsFiltered(){
-  const ordersById=Object.fromEntries((adminCache.orders||[]).map(o=>[String(o.id),o]));
+  const ordersById=Object.fromEntries((adminCache.allOrders||adminCache.orders||[]).map(o=>[String(o.id),o]));
   const goalsById=Object.fromEntries((adminCache.itemGoals||[]).map(g=>[String(g.id),g]));
   const profilesById=Object.fromEntries((adminCache.allProfiles||[]).map(p=>[p.user_id,p]));
   const repFilter=$("#commissionRepFilter")?.value||"";
   const itemFilter=$("#commissionItemFilter")?.value||"";
   const clientFilter=normalizeLegalName($("#commissionClientFilter")?.value||"");
 
-  return (adminCache.orderCampaignItems||[])
+  return (adminCache.allOrderCampaignItems||adminCache.orderCampaignItems||[])
     .filter(r=>r.commission_paid===true && Number(r.commission_value||0)>0)
     .map(r=>{
       const order=ordersById[String(r.order_id)]||{};
@@ -2413,7 +2438,7 @@ function renderCommissionGuide(){
     if(reps.some(r=>r.user_id===keep))repSelect.value=keep;
   }
 
-  const items=[...new Set((adminCache.orderCampaignItems||[])
+  const items=[...new Set((adminCache.allOrderCampaignItems||adminCache.orderCampaignItems||[])
     .filter(r=>r.commission_paid===true)
     .map(r=>{
       const g=(adminCache.itemGoals||[]).find(x=>x.id===r.goal_id);

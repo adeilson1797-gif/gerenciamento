@@ -629,3 +629,10 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - O e-mail de fechamento resume total de pedidos, total das vendas, SKUs e total de itens de campanha.
 - Painel gerencial ganhou Meta Pessoal do Gerente, com realizado, projeção e percentual alimentados pelas vendas finalizadas da equipe.
 - Backend: sales_orders.finalized_at, rep_day_closures e RPC finalize_sales_day.
+
+
+## v6.3.1 — Padronização e restauração das comissões
+- Textos digitados em cadastros e pedidos são convertidos para CAIXA ALTA antes de serem utilizados pelo sistema.
+- E-mail, senha, datas, números e campos monetários não são alterados.
+- A guia Comissão volta a exibir o histórico completo de comissões informado no período, inclusive registros vinculados a pedidos do dia ainda em standby.
+- Os indicadores gerenciais de vendas continuam considerando somente pedidos finalizados.

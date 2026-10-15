@@ -524,3 +524,10 @@ th,td{padding:12px 13px}
 .manager-personal-goal{border:1px solid rgba(0,86,179,.22);background:linear-gradient(135deg,#f6fbff,#fff)}
 .manager-goal-target{font-size:28px;color:#0056b3}.manager-goal-progress{margin-top:16px}
 @media(max-width:760px){.day-finalize-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.finalize-day-btn{font-size:16px;min-height:62px}.manager-goal-target{font-size:22px}}
+
+
+/* v6.3.1 — padrão de digitação em CAIXA ALTA */
+input[type="text"]:not(.money-input),
+input[type="search"],
+input[type="tel"],
+textarea { text-transform: uppercase; }
