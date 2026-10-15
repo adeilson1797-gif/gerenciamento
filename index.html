@@ -206,7 +206,7 @@
           <div class="grid grid-2">
             <div>
               <label>Quantos SKUs foram inseridos no pedido?</label>
-              <input id="orderSkuCount" type="number" min="0" step="1" required value="0" placeholder="Ex.: 12">
+              <input id="orderSkuCount" type="number" min="1" step="1" required placeholder="Ex.: 12">
             </div>
             <div class="sku-help-box">
               <strong>Horizontalização</strong>
@@ -228,9 +228,25 @@
             <div id="orderCampaignItems" class="campaign-order-items"></div>
           </div>
 
-          <button class="btn btn-primary" type="submit">Salvar pedido</button>
+          <button class="btn btn-primary" type="submit">Salvar pedido em standby</button>
           <p id="orderMsg" class="msg"></p>
         </form>
+
+        <div id="dayFinalizeCard" class="day-finalize-card">
+          <div class="day-finalize-copy">
+            <span class="day-finalize-eyebrow">FECHAMENTO DO DIA • <strong id="dayFinalizeDate">—</strong></span>
+            <h3 id="dayFinalizeTitle">Pedidos do dia em standby</h3>
+            <p id="dayFinalizeHint">Cadastre todos os pedidos. Eles ficarão em standby até você confirmar o fechamento do dia.</p>
+          </div>
+          <div class="day-finalize-stats">
+            <div><span>Pedidos</span><strong id="dayFinalizeOrders">0</strong></div>
+            <div><span>Total</span><strong id="dayFinalizeTotal">R$ 0,00</strong></div>
+            <div><span>SKUs</span><strong id="dayFinalizeSkus">0</strong></div>
+            <div><span>Itens campanha</span><strong id="dayFinalizeCampaign">0 un.</strong></div>
+          </div>
+          <button id="finalizeDayBtn" class="finalize-day-btn" type="button" disabled>AGUARDANDO PEDIDOS DO DIA</button>
+          <p id="finalizeDayMsg" class="msg"></p>
+        </div>
 
         <div class="orders-list-block">
           <h3>Últimos pedidos</h3>
@@ -504,6 +520,24 @@
         <div class="kpi"><span>Atingimento mensal</span><strong id="admPct">—</strong></div>
         <div class="kpi"><span>Falta para meta mensal</span><strong id="admRemaining">R$ 0,00</strong></div>
         <div class="kpi"><span>Necessário/dia útil</span><strong id="admDailyNeed">R$ 0,00</strong></div>
+      </div>
+
+      <div id="managerPersonalGoalCard" class="card manager-personal-goal hidden">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">MINHA META GERENCIAL</span>
+            <h2>Meta pessoal do gerente</h2>
+            <p class="muted">O realizado e a projeção são alimentados automaticamente pelas vendas finalizadas dos representantes sob sua gestão.</p>
+          </div>
+          <strong id="managerPersonalTarget" class="manager-goal-target">R$ 0,00</strong>
+        </div>
+        <div class="grid grid-3 mini-grid">
+          <div class="mini-kpi"><span>Realizado da equipe</span><strong id="managerPersonalRealized">R$ 0,00</strong></div>
+          <div class="mini-kpi"><span>Projeção de fechamento</span><strong id="managerPersonalProjection">R$ 0,00</strong></div>
+          <div class="mini-kpi"><span>Atingimento da minha meta</span><strong id="managerPersonalPct">—</strong></div>
+        </div>
+        <div class="progress-track manager-goal-progress"><div id="managerPersonalProgress" class="progress-fill"></div></div>
+        <div class="progress-foot"><span id="managerPersonalRemaining">Meta ainda não definida</span><span>Base: vendas finalizadas da equipe</span></div>
       </div>
       <div class="grid grid-4 item-kpi-grid">
         <div class="kpi"><span>Metas por item cadastradas</span><strong id="admItemTargetTotal">0</strong><small>Cada cadastro conta separadamente</small></div>

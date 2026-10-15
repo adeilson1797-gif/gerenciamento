@@ -617,3 +617,15 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Variáveis opcionais:
   - `SAPECE_ALERT_FROM_EMAIL` (padrão: suporte.sapece@gmail.com)
   - `SAPECE_ALERT_FROM_NAME` (padrão: SAPECE)
+
+
+## v6.3 — Standby, fechamento diário e meta gerencial
+- Pedidos do representante ficam em standby até o fechamento do dia.
+- O representante confirma todos os pedidos em um botão grande de FINALIZAR O DIA.
+- SKUs passaram a ser obrigatórios e devem ser maiores que zero em cada pedido.
+- Vendas, distribuidoras e metas por item só entram nos resultados oficiais depois do fechamento diário.
+- Após finalizar, o representante não pode inserir/alterar pedidos naquele dia; gerência mantém as permissões administrativas.
+- O alerta por e-mail deixa de ser disparado a cada pedido e passa a ser enviado uma única vez no fechamento do dia.
+- O e-mail de fechamento resume total de pedidos, total das vendas, SKUs e total de itens de campanha.
+- Painel gerencial ganhou Meta Pessoal do Gerente, com realizado, projeção e percentual alimentados pelas vendas finalizadas da equipe.
+- Backend: sales_orders.finalized_at, rep_day_closures e RPC finalize_sales_day.

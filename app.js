@@ -21,7 +21,7 @@ function normalizeLegalName(value){
 }
 
 
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[],orders:[],orderCampaignItems:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repOrderDistributorMap={}, repOrderCampaignMap={}, clientBaseCache=[], orderCampaignGoalCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[],orders:[],orderCampaignItems:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repDayClosuresCache=[], repOrderDistributorMap={}, repOrderCampaignMap={}, clientBaseCache=[], orderCampaignGoalCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
 
 function showOnly(id){
   ["#authView","#resetView","#forcePasswordView","#repView","#adminView"].forEach(x=>{
@@ -129,15 +129,20 @@ function bindMoneyInput(el){
 }
 
 
-async function notifySaleByEmail(orderId){
-  if(!orderId)return;
+async function notifyDayFinalizedByEmail(saleDate){
+  if(!saleDate)return {ok:false};
   try{
-    const {error}=await sb.functions.invoke("notify-sale-email",{
-      body:{order_id:Number(orderId)}
+    const {data,error}=await sb.functions.invoke("notify-day-finalized",{
+      body:{sale_date:saleDate}
     });
-    if(error)console.error("Alerta de venda por e-mail:",error);
+    if(error){
+      console.error("Alerta de fechamento por e-mail:",error);
+      return {ok:false,error};
+    }
+    return {ok:true,data};
   }catch(err){
-    console.error("Alerta de venda por e-mail:",err);
+    console.error("Alerta de fechamento por e-mail:",err);
+    return {ok:false,error:err};
   }
 }
 
@@ -831,7 +836,7 @@ async function loadRep(){
   $("#repDailyNeed").textContent=target>0?`Média necessária: ${money(need)}/dia útil`:"Média necessária: —";
   $("#repDaysLeft").textContent=`Dias úteis restantes: ${days}`;
 
-  $("#repHistory").innerHTML=rows.map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${r.note==="Total automático dos pedidos"?"Pedidos cadastrados":(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido no período selecionado.</td></tr>`;
+  $("#repHistory").innerHTML=rows.map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${(r.note==="Total automático dos pedidos"||r.note==="Total automático dos pedidos finalizados")?"Pedidos finalizados":(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido no período selecionado.</td></tr>`;
 
   await loadRepDistributorSummary();
   await loadRepOrders();
@@ -885,18 +890,27 @@ async function loadRepCampaignProgress(){
     const minStart=myGoals.reduce((m,g)=>!m||g.start_date<m?g.start_date:m,null);
     const maxEnd=myGoals.reduce((m,g)=>!m||g.end_date>m?g.end_date:m,null);
 
-    const {data:campaignRows,error:cErr}=await sb.from("order_campaign_items")
-      .select("goal_id,quantity,report_date")
-      .eq("user_id",user.id)
-      .in("goal_id",ids)
-      .gte("report_date",minStart)
-      .lte("report_date",maxEnd);
-    if(cErr)throw cErr;
+    const [{data:campaignRows,error:cErr},{data:finalizedOrders,error:foErr}]=await Promise.all([
+      sb.from("order_campaign_items")
+        .select("order_id,goal_id,quantity,report_date")
+        .eq("user_id",user.id)
+        .in("goal_id",ids)
+        .gte("report_date",minStart)
+        .lte("report_date",maxEnd),
+      sb.from("sales_orders")
+        .select("id")
+        .eq("user_id",user.id)
+        .gte("order_date",minStart)
+        .lte("order_date",maxEnd)
+        .not("finalized_at","is",null)
+    ]);
+    if(cErr||foErr)throw (cErr||foErr);
+    const finalizedIds=new Set((finalizedOrders||[]).map(o=>String(o.id)));
 
     const rows=myGoals.map(goal=>{
       const target=Number(goal.target_quantity||0);
       const sold=(campaignRows||[])
-        .filter(r=>r.goal_id===goal.id)
+        .filter(r=>r.goal_id===goal.id&&finalizedIds.has(String(r.order_id)))
         .reduce((sum,r)=>sum+Number(r.quantity||0),0);
       const pct=target>0?sold/target:0;
       return {
@@ -942,21 +956,24 @@ async function loadRepOrders(){
     {data:customers,error:cErr},
     {data:orders,error:oErr},
     {data:distributors,error:dErr},
-    {data:baseClients,error:bErr}
+    {data:baseClients,error:bErr},
+    {data:closures,error:clErr}
   ]=await Promise.all([
     sb.from("customers").select("*").eq("user_id",user.id).order("legal_name"),
     sb.from("sales_orders").select("*").eq("user_id",user.id).gte("order_date",start).lte("order_date",end).order("order_date",{ascending:false}),
     sb.from("distributors").select("id,name,active").eq("active",true).order("name"),
-    sb.from("client_base").select("*").eq("user_id",user.id).eq("active",true).order("legal_name")
+    sb.from("client_base").select("*").eq("user_id",user.id).eq("active",true).order("legal_name"),
+    sb.from("rep_day_closures").select("sale_date,finalized_at").eq("user_id",user.id).gte("sale_date",start).lte("sale_date",end)
   ]);
 
-  if(cErr||oErr||dErr||bErr){
-    console.error(cErr||oErr||dErr||bErr);
-    return setMsg($("#orderMsg"),(cErr||oErr||dErr||bErr).message);
+  if(cErr||oErr||dErr||bErr||clErr){
+    console.error(cErr||oErr||dErr||bErr||clErr);
+    return setMsg($("#orderMsg"),(cErr||oErr||dErr||bErr||clErr).message);
   }
 
   repCustomersCache=customers||[];
   repOrdersCache=orders||[];
+  repDayClosuresCache=closures||[];
   clientBaseCache=baseClients||[];
 
   const activeDistributors=distributors||[];
@@ -1001,18 +1018,102 @@ async function loadRepOrders(){
       <td>${campaign.length?`${campaign.length} item(ns) • ${campaignQty} un.`:"—"}</td>
       <td>${commission>0?money(commission):"—"}</td>
       <td>${money(o.amount)}</td>
-      <td><span class="locked-sale-badge">🔒 Enviado</span></td>
+      <td>${o.finalized_at
+        ? `<span class="locked-sale-badge">✅ Finalizado</span>`
+        : `<span class="standby-sale-badge">⏳ Standby</span>`}</td>
     </tr>`;
   }).join("")||`<tr><td colspan="12">Nenhum pedido registrado no período selecionado.</td></tr>`;
 
-  const skuTotal=repOrdersCache.reduce((s,o)=>s+Number(o.sku_count||0),0);
+  const finalizedOrders=repOrdersCache.filter(o=>o.finalized_at);
+  const skuTotal=finalizedOrders.reduce((s,o)=>s+Number(o.sku_count||0),0);
   $("#repSkuTotal").textContent=String(skuTotal);
-  $("#repSkuOrders").textContent=String(repOrdersCache.length);
-  $("#repSkuAverage").textContent=repOrdersCache.length?(skuTotal/repOrdersCache.length).toFixed(1).replace(".",","):"0,0";
+  $("#repSkuOrders").textContent=String(finalizedOrders.length);
+  $("#repSkuAverage").textContent=finalizedOrders.length?(skuTotal/finalizedOrders.length).toFixed(1).replace(".",","):"0,0";
 
   try{renderRepCnpjRanking();}catch(err){console.error("Ranking CNPJ:",err);}
   renderCurrentOrderConflicts();
+  renderDayFinalizationState();
   loadOrderCampaignItems($("#orderDate")?.value||today()).catch(err=>console.error("Campanhas:",err));
+}
+
+function setOrderFormLockedForDate(locked){
+  const form=$("#orderForm");
+  if(!form)return;
+  form.querySelectorAll("input,select,button").forEach(el=>{
+    if(el.id==="orderDate")return;
+    el.disabled=Boolean(locked);
+  });
+  form.classList.toggle("order-form-locked",Boolean(locked));
+}
+
+function selectedDaySummary(){
+  const dateStr=$("#orderDate")?.value||today();
+  const orders=(repOrdersCache||[]).filter(o=>o.order_date===dateStr);
+  const pending=orders.filter(o=>!o.finalized_at);
+  const finalized=orders.filter(o=>o.finalized_at);
+  const closure=(repDayClosuresCache||[]).find(c=>c.sale_date===dateStr);
+  const relevant=closure?finalized:pending;
+  const orderIds=new Set(relevant.map(o=>String(o.id)));
+  let campaignQty=0;
+  Object.entries(repOrderCampaignMap||{}).forEach(([orderId,rows])=>{
+    if(orderIds.has(String(orderId))) campaignQty+=(rows||[]).reduce((s,r)=>s+Number(r.quantity||0),0);
+  });
+  return {dateStr,orders,pending,finalized,closure,relevant,campaignQty,total:relevant.reduce((s,o)=>s+Number(o.amount||0),0),skus:relevant.reduce((s,o)=>s+Number(o.sku_count||0),0)};
+}
+
+function renderDayFinalizationState(){
+  const card=$("#dayFinalizeCard"),btn=$("#finalizeDayBtn");
+  if(!card||!btn)return;
+  const s=selectedDaySummary();
+  const formatted=s.dateStr.split("-").reverse().join("/");
+  $("#dayFinalizeDate").textContent=formatted;
+  $("#dayFinalizeOrders").textContent=String(s.relevant.length);
+  $("#dayFinalizeTotal").textContent=money(s.total);
+  $("#dayFinalizeSkus").textContent=String(s.skus);
+  $("#dayFinalizeCampaign").textContent=`${s.campaignQty} un.`;
+  setOrderFormLockedForDate(Boolean(s.closure));
+
+  card.classList.toggle("is-finalized",Boolean(s.closure));
+  card.classList.toggle("is-ready",!s.closure&&s.pending.length>0);
+  if(s.closure){
+    $("#dayFinalizeTitle").textContent="Dia finalizado e enviado para a gerência";
+    $("#dayFinalizeHint").textContent="Os pedidos deste dia estão confirmados e não podem mais ser alterados pelo representante.";
+    btn.disabled=true;
+    btn.textContent="✅ DIA FINALIZADO";
+    return;
+  }
+
+  $("#dayFinalizeTitle").textContent=s.pending.length?"Se terminou os pedidos, finalize o dia":"Pedidos do dia em standby";
+  $("#dayFinalizeHint").textContent=s.pending.length
+    ? "Confira os totais abaixo. Somente depois de finalizar as vendas entrarão no resultado oficial e o alerta será enviado."
+    : "Cadastre todos os pedidos. Eles ficarão em standby até você confirmar o fechamento do dia.";
+  btn.disabled=s.pending.length===0;
+  btn.textContent=s.pending.length?`✅ FINALIZAR O DIA — CONFIRMAR ${s.pending.length} PEDIDO${s.pending.length===1?"":"S"}`:"AGUARDANDO PEDIDOS DO DIA";
+}
+
+async function refreshSelectedDayState(){
+  if(!user||profile?.role!=="rep")return;
+  const dateStr=$("#orderDate")?.value||today();
+  const [{data:orders,error:oErr},{data:closures,error:cErr}]=await Promise.all([
+    sb.from("sales_orders").select("*").eq("user_id",user.id).eq("order_date",dateStr).order("created_at"),
+    sb.from("rep_day_closures").select("sale_date,finalized_at").eq("user_id",user.id).eq("sale_date",dateStr)
+  ]);
+  if(oErr||cErr){console.error(oErr||cErr);return;}
+  const otherOrders=(repOrdersCache||[]).filter(o=>o.order_date!==dateStr);
+  repOrdersCache=[...otherOrders,...(orders||[])];
+  const otherClosures=(repDayClosuresCache||[]).filter(c=>c.sale_date!==dateStr);
+  repDayClosuresCache=[...otherClosures,...(closures||[])];
+
+  const ids=(orders||[]).map(o=>o.id);
+  ids.forEach(id=>delete repOrderCampaignMap[String(id)]);
+  if(ids.length){
+    const {data:campaign,error}=await sb.from("order_campaign_items").select("*").eq("user_id",user.id).in("order_id",ids);
+    if(!error)(campaign||[]).forEach(row=>{
+      repOrderCampaignMap[String(row.order_id)]||=[];
+      repOrderCampaignMap[String(row.order_id)].push(row);
+    });
+  }
+  renderDayFinalizationState();
 }
 
 async function loadOrderCampaignItems(dateStr){
@@ -1144,6 +1245,7 @@ function collectOrderCampaignItems(){
 }
 
 $("#orderDate")?.addEventListener("change",async()=>{
+  await refreshSelectedDayState();
   await loadOrderCampaignItems($("#orderDate").value||today());
   await loadRepCampaignProgress();
 });
@@ -1267,7 +1369,8 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   if(!distributor_id)return setMsg($("#orderMsg"),"Selecione a distribuidora.");
   if(amount<=0)return setMsg($("#orderMsg"),"Informe um valor de pedido maior que zero.");
   if(!order_number)return setMsg($("#orderMsg"),"Informe o número do pedido.");
-  if(!Number.isInteger(sku_count)||sku_count<0)return setMsg($("#orderMsg"),"Informe uma quantidade válida de SKUs.");
+  if(!Number.isInteger(sku_count)||sku_count<=0)return setMsg($("#orderMsg"),"Informe obrigatoriamente quantos SKUs existem no pedido. O valor deve ser maior que zero.");
+  if((repDayClosuresCache||[]).some(c=>c.sale_date===order_date))return setMsg($("#orderMsg"),"Este dia já foi finalizado. Não é possível inserir novos pedidos nesta data.");
   if(!campaignData.ok)return setMsg($("#orderMsg"),campaignData.message);
 
   const baseByCnpj=findOrderBaseClientByCnpj(cnpj);
@@ -1326,14 +1429,39 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     }
   }
 
-  // O alerta é independente do salvamento: se o serviço de e-mail estiver indisponível,
-  // o pedido continua salvo normalmente.
-  notifySaleByEmail(savedOrder.id);
-
-  setMsg($("#orderMsg"),"Pedido salvo com SKUs e campanhas atualizados.","ok");
+  setMsg($("#orderMsg"),"Pedido salvo em standby. Continue inserindo os pedidos e finalize o dia quando terminar.","ok");
   $("#orderAmount").value="";
   $("#orderNumber").value="";
-  $("#orderSkuCount").value="0";
+  $("#orderSkuCount").value="";
+  await loadRep();
+});
+
+$("#finalizeDayBtn")?.addEventListener("click",async()=>{
+  if(profile?.role!=="rep")return;
+  const s=selectedDaySummary();
+  if(s.closure)return;
+  if(!s.pending.length)return setMsg($("#finalizeDayMsg"),"Não há pedidos em standby para finalizar.");
+
+  const ok=confirm(`Confirmar o fechamento de ${s.dateStr.split("-").reverse().join("/")} com ${s.pending.length} pedido(s), total de ${money(s.total)} e ${s.campaignQty} unidade(s) de campanha?\n\nApós confirmar, o representante não poderá alterar esses pedidos.`);
+  if(!ok)return;
+
+  const btn=$("#finalizeDayBtn");
+  btn.disabled=true;
+  btn.textContent="FINALIZANDO O DIA...";
+  setMsg($("#finalizeDayMsg"),"");
+
+  const {data,error}=await sb.rpc("finalize_sales_day",{p_sale_date:s.dateStr});
+  if(error){
+    renderDayFinalizationState();
+    return setMsg($("#finalizeDayMsg"),error.message);
+  }
+
+  const mail=await notifyDayFinalizedByEmail(s.dateStr);
+  if(mail.ok){
+    setMsg($("#finalizeDayMsg"),`Dia finalizado com sucesso. ${Number(data?.orders||s.pending.length)} pedido(s) confirmados e alerta enviado para a gerência.`,"ok");
+  }else{
+    setMsg($("#finalizeDayMsg"),"Dia finalizado com sucesso. O fechamento foi confirmado, mas o alerta por e-mail não pôde ser enviado agora.","ok");
+  }
   await loadRep();
 });
 
@@ -1654,7 +1782,7 @@ async function loadAdmin(){
     sb.from("item_goal_reports").select("*").gte("report_date",start).lte("report_date",end),
     sb.from("distributors").select("*").order("name"),
     sb.from("daily_sales_distributors").select("*").gte("sale_date",start).lte("sale_date",end),
-    sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end),
+    sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end).not("finalized_at","is",null),
     sb.from("customers").select("*"),
     sb.from("order_campaign_items").select("*").gte("report_date",start).lte("report_date",end)
   ]);
@@ -1687,6 +1815,21 @@ async function loadAdmin(){
   $("#admPct").textContent=target>0?percent(totalMonth/target):"—";
   $("#admRemaining").textContent=money(remaining);
   $("#admDailyNeed").textContent=target>0?money(need):"—";
+
+  const managerGoalCard=$("#managerPersonalGoalCard");
+  const managerGoalVisible=["sub_admin","regional_manager","divisional_manager"].includes(profile?.role);
+  managerGoalCard?.classList.toggle("hidden",!managerGoalVisible);
+  if(managerGoalVisible){
+    const managerTarget=Number(profile.monthly_target||0);
+    const managerPct=managerTarget>0?totalMonth/managerTarget:0;
+    const managerRemaining=Math.max(managerTarget-totalMonth,0);
+    $("#managerPersonalTarget").textContent=money(managerTarget);
+    $("#managerPersonalRealized").textContent=money(totalMonth);
+    $("#managerPersonalProjection").textContent=money(projection);
+    $("#managerPersonalPct").textContent=managerTarget>0?percent(managerPct):"—";
+    $("#managerPersonalRemaining").textContent=managerTarget>0?`Faltam ${money(managerRemaining)}`:"Meta ainda não definida pelo administrador";
+    $("#managerPersonalProgress").style.width=`${Math.min(managerPct*100,100)}%`;
+  }
   const activeItemGoals=(itemGoals||[]).filter(g=>g.active);
   const activeGoalIds=new Set(activeItemGoals.map(g=>g.id));
   const itemGoalCount=activeItemGoals.length;
@@ -1734,7 +1877,9 @@ async function loadAdmin(){
     <td>${i.code.slice(0,10)}…</td>
     <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
   </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
-  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[],orders:orders||[],customers:customers||[],orderCampaignItems:orderCampaignItems||[]};
+  const finalizedOrderIds=new Set((orders||[]).map(o=>String(o.id)));
+  const finalizedCampaignItems=(orderCampaignItems||[]).filter(i=>finalizedOrderIds.has(String(i.order_id)));
+  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[],orders:orders||[],customers:customers||[],orderCampaignItems:finalizedCampaignItems};
   renderAdminSalesHistory();
   renderUserManagement();
   renderItemGoalsManager();

@@ -504,3 +504,23 @@ th,td{padding:12px 13px}
 .campaign-count-kpis{margin-top:12px}
 #repItemGoalsCard .goal-count-summary{margin-top:10px}
 #repCnpjRankingCard{display:block}
+
+
+/* SAPECE v6.3 — standby e fechamento diário */
+.day-finalize-card{margin-top:22px;padding:24px;border:2px solid #f0b429;border-radius:22px;background:linear-gradient(135deg,#fffaf0,#fff);box-shadow:0 14px 34px rgba(129,92,20,.12);transition:.25s ease}
+.day-finalize-card.is-ready{border-color:#f59e0b;box-shadow:0 16px 40px rgba(245,158,11,.20);transform:translateY(-1px)}
+.day-finalize-card.is-finalized{border-color:#28a745;background:linear-gradient(135deg,#f0fff4,#fff);box-shadow:0 14px 34px rgba(40,167,69,.14)}
+.day-finalize-eyebrow{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.08em;color:#9a6700;margin-bottom:7px}
+.day-finalize-card.is-finalized .day-finalize-eyebrow{color:#1f7a35}
+.day-finalize-copy h3{font-size:22px;margin:0 0 6px}.day-finalize-copy p{margin:0;color:#667085}
+.day-finalize-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}
+.day-finalize-stats>div{padding:14px;border:1px solid #eadfcb;background:#fff;border-radius:14px}.day-finalize-stats span{display:block;font-size:12px;color:#667085;margin-bottom:4px}.day-finalize-stats strong{font-size:20px;color:#1f2937}
+.finalize-day-btn{width:100%;min-height:68px;border:0;border-radius:16px;padding:16px 20px;font-size:18px;font-weight:900;letter-spacing:.02em;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;box-shadow:0 10px 24px rgba(217,119,6,.28);transition:.2s ease}
+.finalize-day-btn:not(:disabled):hover{transform:translateY(-2px) scale(1.005);box-shadow:0 14px 30px rgba(217,119,6,.34)}
+.finalize-day-btn:disabled{cursor:not-allowed;opacity:.62;box-shadow:none}
+.day-finalize-card.is-finalized .finalize-day-btn{background:linear-gradient(135deg,#2fb344,#238636);opacity:1}
+.standby-sale-badge{display:inline-flex;align-items:center;gap:5px;background:#fff4d6;color:#9a6700;border:1px solid #f4d27b;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:800}
+.order-form-locked{opacity:.78}.order-form-locked:before{content:"Dia finalizado — formulário bloqueado para esta data";display:block;margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#eef9f0;color:#1f7a35;font-weight:800}
+.manager-personal-goal{border:1px solid rgba(0,86,179,.22);background:linear-gradient(135deg,#f6fbff,#fff)}
+.manager-goal-target{font-size:28px;color:#0056b3}.manager-goal-progress{margin-top:16px}
+@media(max-width:760px){.day-finalize-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.finalize-day-btn{font-size:16px;min-height:62px}.manager-goal-target{font-size:22px}}
