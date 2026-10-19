@@ -415,6 +415,11 @@ async function boot(){
     $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
     $("#itemGoalCreateCard")?.classList.toggle("hidden",isDivisional);
     $("#distributorManagerCard")?.classList.toggle("hidden",isDivisional);
+    if($("#distributorManagerHint")){
+      $("#distributorManagerHint").textContent=isRegional
+        ? `As distribuidoras que você cadastrar ficarão disponíveis somente para sua região: ${(profile.managed_states||[]).join(", ")||"REGIÃO NÃO DEFINIDA"}.`
+        : "Cadastre distribuidoras e acompanhe os valores separados. Distribuidoras globais ficam disponíveis para todas as regiões.";
+    }
     $("#divisionalSummaryCard")?.classList.toggle("hidden",!isDivisional);
     $("#divisionalOnlyDashboard")?.classList.toggle("hidden",!isDivisional);
 
@@ -1886,8 +1891,13 @@ async function loadAdmin(){
     $("#managerPersonalRealized").textContent=money(totalMonth);
     $("#managerPersonalProjection").textContent=money(projection);
     $("#managerPersonalPct").textContent=managerTarget>0?percent(managerPct):"—";
-    $("#managerPersonalRemaining").textContent=managerTarget>0?`Faltam ${money(managerRemaining)}`:"Meta ainda não definida pelo administrador";
+    $("#managerPersonalRemaining").textContent=managerTarget>0?`Faltam ${money(managerRemaining)}`:(profile?.role==="regional_manager"?"Defina sua meta mensal abaixo":"Meta ainda não definida pelo administrador");
     $("#managerPersonalProgress").style.width=`${Math.min(managerPct*100,100)}%`;
+    const regionalGoalEdit=$("#regionalManagerGoalEdit");
+    regionalGoalEdit?.classList.toggle("hidden",profile?.role!=="regional_manager");
+    if(profile?.role==="regional_manager" && $("#regionalManagerGoalInput")){
+      $("#regionalManagerGoalInput").value=formatBRLInput(managerTarget);
+    }
   }
 
   // Liberação excepcional do dia: disponível para ADM, Sub ADM e Gerente Regional.
@@ -2336,16 +2346,28 @@ function renderItemPerformance(){
 
 function renderDistributorManager(){
   const rows=adminCache.distributors||[];
-  const canDelete=profile?.role==="admin";
-  $("#distributorsTable").innerHTML=rows.map(d=>`<tr>
-    <td><input class="inline-edit distributor-name-edit" data-id="${d.id}" value="${String(d.name||"").replaceAll('"','&quot;')}"></td>
-    <td><span class="${d.active?"user-status-active":"user-status-inactive"}">${d.active?"Ativa":"Inativa"}</span></td>
-    <td>
-      <button class="btn btn-xs btn-primary" onclick="saveDistributorName(${d.id})">Salvar nome</button>
-      <button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button>
-      ${canDelete?`<button class="btn btn-xs btn-danger" onclick="deleteDistributor(${d.id},'${String(d.name||"").replaceAll("'","&#39;")}')">Apagar</button>`:""}
-    </td>
-  </tr>`).join("")||`<tr><td colspan="3">Nenhuma distribuidora cadastrada.</td></tr>`;
+  const isRegional=profile?.role==="regional_manager";
+  const canEditAll=["admin","sub_admin"].includes(profile?.role);
+  $("#distributorsTable").innerHTML=rows.map(d=>{
+    const ownRegional=isRegional && d.created_by===user?.id;
+    const canEdit=canEditAll||ownRegional;
+    const canDelete=canEditAll||ownRegional;
+    const region=(d.region_states||[]).length?(d.region_states||[]).join(", "):"GLOBAL";
+    const nameCell=canEdit
+      ? `<input class="inline-edit distributor-name-edit" data-id="${d.id}" value="${String(d.name||"").replaceAll('"','&quot;')}">`
+      : `<strong>${d.name||"—"}</strong>`;
+    const actions=canEdit
+      ? `<button class="btn btn-xs btn-primary" onclick="saveDistributorName(${d.id})">Salvar nome</button>
+         <button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button>
+         ${canDelete?`<button class="btn btn-xs btn-danger" onclick="deleteDistributor(${d.id},'${String(d.name||"").replaceAll("'","&#39;")}')">Apagar</button>`:""}`
+      : '<span class="muted">Disponível na sua região</span>';
+    return `<tr>
+      <td>${nameCell}</td>
+      <td><strong>${region}</strong></td>
+      <td><span class="${d.active?"user-status-active":"user-status-inactive"}">${d.active?"Ativa":"Inativa"}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="4">Nenhuma distribuidora disponível para sua região.</td></tr>`;
 }
 
 
@@ -2599,10 +2621,23 @@ function renderDistributorSales(){
   }).join("")||`<tr><td colspan="4">Nenhuma distribuidora cadastrada.</td></tr>`;
 }
 
+$("#saveRegionalManagerGoalBtn")?.addEventListener("click",async()=>{
+  if(profile?.role!=="regional_manager") return;
+  const msg=$("#regionalManagerGoalMsg");
+  setMsg(msg,"");
+  const target=parseCurrencyInput($("#regionalManagerGoalInput")?.value||"0");
+  if(target<0) return setMsg(msg,"Informe uma meta válida.");
+  const {data,error}=await sb.rpc("update_my_regional_target",{p_monthly_target:target});
+  if(error) return setMsg(msg,error.message);
+  await loadProfile();
+  setMsg(msg,`Meta atualizada para ${money(Number(data||target))}.`,"ok");
+  await loadAdmin();
+});
+
 $("#distributorForm")?.addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#distributorMsg"),"");
-  if(!["admin","sub_admin"].includes(profile?.role)) return;
-  const name=$("#distributorName").value.trim();
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
+  const name=$("#distributorName").value.trim().toUpperCase();
   if(!name)return setMsg($("#distributorMsg"),"Informe o nome da distribuidora.");
   const {error}=await sb.from("distributors").insert({name,created_by:user.id,active:true});
   if(error)return setMsg($("#distributorMsg"),error.message);
@@ -2621,7 +2656,7 @@ window.toggleDistributor=async(id,active)=>{
 window.saveDistributorName=async(id)=>{
   if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return;
   const input=document.querySelector(`.distributor-name-edit[data-id="${id}"]`);
-  const name=input?.value.trim();
+  const name=input?.value.trim().toUpperCase();
   if(!name)return alert("Informe o nome da distribuidora.");
   const {error}=await sb.from("distributors").update({name}).eq("id",id);
   if(error)return alert(error.message);
@@ -2629,7 +2664,9 @@ window.saveDistributorName=async(id)=>{
 };
 
 window.deleteDistributor=async(id,name)=>{
-  if(profile?.role!=="admin") return;
+  const dist=(adminCache.distributors||[]).find(d=>Number(d.id)===Number(id));
+  const canDelete=["admin","sub_admin"].includes(profile?.role)||(profile?.role==="regional_manager"&&dist?.created_by===user?.id);
+  if(!canDelete) return;
   if(!confirm(`Apagar a distribuidora "${name}"?`)) return;
   const {error}=await sb.from("distributors").delete().eq("id",id);
   if(error){

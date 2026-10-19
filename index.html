@@ -539,6 +539,16 @@
         </div>
         <div class="progress-track manager-goal-progress"><div id="managerPersonalProgress" class="progress-fill"></div></div>
         <div class="progress-foot"><span id="managerPersonalRemaining">Meta ainda não definida</span><span>Base: vendas finalizadas da equipe</span></div>
+        <div id="regionalManagerGoalEdit" class="grid grid-3 mini-grid hidden" style="margin-top:16px;align-items:end">
+          <div>
+            <label>Editar minha meta mensal</label>
+            <input id="regionalManagerGoalInput" class="money-input" type="text" inputmode="numeric" placeholder="R$ 0,00" autocomplete="off">
+          </div>
+          <div>
+            <button id="saveRegionalManagerGoalBtn" class="btn btn-primary" type="button">SALVAR MINHA META</button>
+          </div>
+          <div><p id="regionalManagerGoalMsg" class="msg"></p></div>
+        </div>
       </div>
       <div id="managerReopenDayCard" class="card manager-reopen-day hidden">
         <div class="section-head">
@@ -794,7 +804,7 @@
         <div class="section-head">
           <div>
             <h2>Distribuidoras</h2>
-            <p class="muted">Administrador Geral e Subadministrador podem cadastrar distribuidoras e acompanhar os valores separados.</p>
+            <p id="distributorManagerHint" class="muted">Cadastre distribuidoras e acompanhe os valores separados. Para Gerentes Regionais, a distribuidora fica vinculada automaticamente à sua região.</p>
           </div>
         </div>
         <div class="grid grid-2">
@@ -808,7 +818,7 @@
             <h3>Cadastradas</h3>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Distribuidora</th><th>Status</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Distribuidora</th><th>Região</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="distributorsTable"></tbody>
               </table>
             </div>

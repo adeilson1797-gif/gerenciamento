@@ -662,3 +662,14 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Código de convite passa a ser tratado sem diferença entre maiúsculas e minúsculas.
 - Melhora a mensagem para e-mail já iniciado/cadastrado.
 - Mantém recuperação automática ao repetir o cadastro com a mesma senha.
+
+## v6.3.3 — meta pessoal e distribuidoras por região
+
+- Gerente Regional pode editar a própria meta mensal diretamente no painel.
+- A meta pessoal continua sendo alimentada pelas vendas finalizadas dos representantes sob sua gestão.
+- Gerente Regional pode cadastrar distribuidoras no painel.
+- Distribuidoras cadastradas por Gerente Regional ficam vinculadas automaticamente aos estados em `managed_states`.
+- Representantes visualizam apenas distribuidoras globais ou distribuidores vinculados ao seu estado.
+- Gerente Regional pode editar, ativar/desativar e apagar apenas as distribuidoras que ele próprio cadastrou.
+- Administrador Geral e Subadministrador continuam podendo administrar distribuidoras globais.
+- Gerente Divisional permanece em modo de consulta e consegue visualizar o consolidado de todas as regiões.
