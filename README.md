@@ -1,3 +1,11 @@
+# SAPECE v6.3.2
+
+## Novidade
+- Administrador Geral, Subadministrador e Gerente Regional agora possuem a área **Liberar dia para novos pedidos**.
+- Ao liberar um dia já finalizado, os pedidos antigos continuam finalizados/bloqueados.
+- O representante pode adicionar somente novos pedidos e depois finalizar o dia novamente.
+- O novo fechamento consolida o total completo do dia e dispara novamente o resumo atualizado por e-mail.
+
 # Acompanhamento Gerencial
 
 Projeto web para coleta online do valor total de vendas diárias de representantes comerciais.

@@ -531,3 +531,11 @@ input[type="text"]:not(.money-input),
 input[type="search"],
 input[type="tel"],
 textarea { text-transform: uppercase; }
+
+/* v6.3.2 — liberação de dia pelo gerente */
+.manager-reopen-day{border:1px solid rgba(217,119,6,.25);background:linear-gradient(135deg,#fffaf0,#fff)}
+.manager-reopen-grid{align-items:end}
+.manager-reopen-action{display:flex;align-items:end;height:100%}
+.manager-reopen-btn{width:100%;min-height:46px;font-weight:900;background:#f59e0b;color:#fff;border-color:#f59e0b}
+.manager-reopen-btn:hover{background:#d97706;border-color:#d97706}
+@media(max-width:760px){.manager-reopen-action{height:auto}.manager-reopen-btn{min-height:52px}}

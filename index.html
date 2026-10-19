@@ -539,6 +539,30 @@
         <div class="progress-track manager-goal-progress"><div id="managerPersonalProgress" class="progress-fill"></div></div>
         <div class="progress-foot"><span id="managerPersonalRemaining">Meta ainda não definida</span><span>Base: vendas finalizadas da equipe</span></div>
       </div>
+      <div id="managerReopenDayCard" class="card manager-reopen-day hidden">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">LIBERAÇÃO EXCEPCIONAL</span>
+            <h2>Liberar dia para novos pedidos</h2>
+            <p class="muted">Use quando o representante já finalizou o dia e precisa incluir pedidos adicionais. Os pedidos já confirmados permanecem bloqueados e não são alterados.</p>
+          </div>
+        </div>
+        <div class="grid grid-3 mini-grid manager-reopen-grid">
+          <div>
+            <label>Representante</label>
+            <select id="managerReopenRep"><option value="">Selecione...</option></select>
+          </div>
+          <div>
+            <label>Data a liberar</label>
+            <input id="managerReopenDate" type="date">
+          </div>
+          <div class="manager-reopen-action">
+            <button id="managerReopenDayBtn" class="btn btn-warning manager-reopen-btn" type="button">🔓 LIBERAR DIA</button>
+          </div>
+        </div>
+        <p id="managerReopenDayMsg" class="msg"></p>
+      </div>
+
       <div class="grid grid-4 item-kpi-grid">
         <div class="kpi"><span>Metas por item cadastradas</span><strong id="admItemTargetTotal">0</strong><small>Cada cadastro conta separadamente</small></div>
         <div class="kpi"><span>Unidades realizadas nos itens</span><strong id="admItemSoldTotal">0 un.</strong></div>
