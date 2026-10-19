@@ -673,3 +673,11 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Gerente Regional pode editar, ativar/desativar e apagar apenas as distribuidoras que ele próprio cadastrou.
 - Administrador Geral e Subadministrador continuam podendo administrar distribuidoras globais.
 - Gerente Divisional permanece em modo de consulta e consegue visualizar o consolidado de todas as regiões.
+
+## v6.3.4 — Cadastro manual de representantes
+- Novo card no painel gerencial para criar representante sem convite.
+- Campos: nome, e-mail, senha inicial, UF e meta mensal.
+- Usuário é criado diretamente no Supabase Auth e no perfil SAPECE.
+- Primeiro acesso exige troca de senha.
+- Se o e-mail já existir no Auth mas ainda não tiver perfil, o cadastro é recuperado e concluído.
+- Gerente Regional só pode cadastrar representantes das UFs sob sua gestão.

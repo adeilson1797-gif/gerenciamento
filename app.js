@@ -401,6 +401,10 @@ async function boot(){
     $("#managerRoleBadge").classList.toggle("regional-badge",isRegional);
 
     $("#adminInviteCard")?.classList.toggle("hidden",isDivisional);
+    $("#manualRepCard")?.classList.toggle("hidden",isDivisional);
+    if(isRegional && $("#manualRepState") && (profile.managed_states||[]).length===1){
+      $("#manualRepState").value=String(profile.managed_states[0]||"").toUpperCase();
+    }
     if($("#inviteRole")){
       $("#inviteRole").innerHTML=isMainAdmin
         ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option><option value="regional_manager">Gerente Regional</option><option value="divisional_manager">Gerente Divisional</option>'
@@ -2799,6 +2803,49 @@ $("#exportBtn").addEventListener("click",()=>{
   const csv="\ufeff"+rows.map(r=>r.map(escapeCsv).join(";")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=url;a.download=`vendas-${adminCache.month}.csv`;a.click();URL.revokeObjectURL(url);
+});
+
+$("#manualRepForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const msg=$("#manualRepMsg");
+  setMsg(msg,"");
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)){
+    return setMsg(msg,"Você não possui permissão para cadastrar representantes.");
+  }
+  const name=$("#manualRepName").value.trim().toUpperCase();
+  const email=$("#manualRepEmail").value.trim().toLowerCase();
+  const password=$("#manualRepPassword").value;
+  const state_code=$("#manualRepState").value.trim().toUpperCase();
+  const monthly_target=parseCurrencyInput($("#manualRepTarget").value);
+  if(!name)return setMsg(msg,"Informe o nome do representante.");
+  if(!email||!email.includes("@"))return setMsg(msg,"Informe um e-mail válido.");
+  if(password.length<6)return setMsg(msg,"A senha inicial deve ter pelo menos 6 caracteres.");
+  if(!/^[A-Z]{2}$/.test(state_code))return setMsg(msg,"Informe a UF com 2 letras, por exemplo PE.");
+  if(profile?.role==="regional_manager"){
+    const allowed=(profile.managed_states||[]).map(x=>String(x).toUpperCase());
+    if(!allowed.includes(state_code))return setMsg(msg,"Você só pode cadastrar representantes da sua região.");
+  }
+  const btn=$("#manualRepSubmit");
+  if(btn){btn.disabled=true;btn.textContent="CADASTRANDO...";}
+  try{
+    const {data,error}=await sb.functions.invoke("admin-create-representative",{body:{name,email,password,state_code,monthly_target}});
+    if(error){
+      const details=error?.context?.json ? await error.context.json().catch(()=>null) : null;
+      throw new Error(details?.error||error.message||"Erro ao cadastrar representante.");
+    }
+    if(data?.error)throw new Error(data.error);
+    setMsg(msg,`Representante ${data?.name||name} cadastrado com sucesso em ${state_code}. No primeiro acesso deverá trocar a senha.`,"ok");
+    $("#manualRepName").value="";
+    $("#manualRepEmail").value="";
+    $("#manualRepPassword").value="";
+    $("#manualRepTarget").value="R$ 0,00";
+    if(profile?.role!=="regional_manager" || (profile.managed_states||[]).length!==1) $("#manualRepState").value="";
+    await loadAdmin();
+  }catch(err){
+    setMsg(msg,err?.message||"Erro ao cadastrar representante.");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="CADASTRAR REPRESENTANTE";}
+  }
 });
 
 function updateInviteRoleFields(){
