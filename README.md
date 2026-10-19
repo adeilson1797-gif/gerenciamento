@@ -1,3 +1,14 @@
+SAPECE v6.3.2.3 — correção de cadastro parcial / usuário já registrado
+
+# SAPECE v6.3.2.2
+
+Correção de visibilidade da função **Liberar Dia**.
+
+- Novo botão **🔓 LIBERAR DIA** no topo do painel gerencial, ao lado de Painel Gerencial e Comissão.
+- Disponível para Administrador Geral, Subadministrador e Gerente Regional.
+- Ao clicar, o sistema abre e centraliza a área de liberação.
+- Os pedidos já finalizados continuam intactos e bloqueados; a liberação permite apenas novos pedidos na data escolhida.
+
 # SAPECE v6.3.2
 
 ## Novidade

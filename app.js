@@ -347,6 +347,13 @@ function setAdminGuide(name){
 $("#adminGuideMainBtn")?.addEventListener("click",()=>setAdminGuide("main"));
 $("#adminGuideCommissionBtn")?.addEventListener("click",()=>setAdminGuide("commission"));
 
+$("#adminGuideReopenDayBtn")?.addEventListener("click",()=>{
+  setAdminGuide("main");
+  const card=$("#managerReopenDayCard");
+  card?.classList.remove("hidden");
+  setTimeout(()=>card?.scrollIntoView({behavior:"smooth",block:"center"}),60);
+});
+
 function maybeCelebrateMonthlyGoal(monthTotal,target){
   if(profile?.role!=="rep"||Number(target||0)<=0||Number(monthTotal||0)<Number(target||0))return;
   const key=`sapece_goal_celebrated_${user?.id||"user"}_${monthNow()}`;
@@ -496,11 +503,36 @@ $("#setupForm").addEventListener("submit",async e=>{
 });
 $("#repSignupForm").addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#repSignupMsg"),"");
-  const code=$("#inviteCode").value.trim(),email=$("#repEmail").value.trim(),password=$("#repPassword").value;
-  const {data,error}=await sb.auth.signUp({email,password});if(error)return setMsg($("#repSignupMsg"),error.message);
-  if(!data.session){localStorage.setItem("pending_invite_code",code);return setMsg($("#repSignupMsg"),"Conta criada. Confirme o e-mail e depois entre.","ok");}
-  user=data.user;const {error:rpcErr}=await sb.rpc("claim_representative_invite",{p_code:code});
-  if(rpcErr)return setMsg($("#repSignupMsg"),rpcErr.message);await boot();
+  const code=$("#inviteCode").value.trim(),email=$("#repEmail").value.trim().toLowerCase(),password=$("#repPassword").value;
+
+  let {data,error}=await sb.auth.signUp({email,password});
+
+  // Recupera automaticamente cadastros que ficaram pela metade: o usuário foi criado
+  // no Auth, mas o convite/perfil não chegou a ser concluído.
+  if(error && /already registered|already been registered|user.*registered/i.test(error.message||"")){
+    const login=await sb.auth.signInWithPassword({email,password});
+    if(login.error){
+      return setMsg($("#repSignupMsg"),"Este e-mail já possui acesso no SAPECE. Use a senha cadastrada ou a opção de recuperar senha.");
+    }
+    data=login.data;error=null;
+  }
+
+  if(error)return setMsg($("#repSignupMsg"),error.message);
+  if(!data?.session){
+    localStorage.setItem("pending_invite_code",code);
+    return setMsg($("#repSignupMsg"),"Conta criada. Confirme o e-mail e depois entre para concluir o cadastro.","ok");
+  }
+
+  user=data.user;
+  const {error:rpcErr}=await sb.rpc("claim_representative_invite",{p_code:code});
+  if(rpcErr){
+    if(/já possui perfil/i.test(rpcErr.message||"")){
+      return await boot();
+    }
+    return setMsg($("#repSignupMsg"),rpcErr.message);
+  }
+  localStorage.removeItem("pending_invite_code");
+  await boot();
 });
 $("#logoutBtn").addEventListener("click",async()=>{await sb.auth.signOut();await boot();});
 
@@ -1853,6 +1885,22 @@ async function loadAdmin(){
     $("#managerPersonalRemaining").textContent=managerTarget>0?`Faltam ${money(managerRemaining)}`:"Meta ainda não definida pelo administrador";
     $("#managerPersonalProgress").style.width=`${Math.min(managerPct*100,100)}%`;
   }
+
+  // Liberação excepcional do dia: disponível para ADM, Sub ADM e Gerente Regional.
+  const reopenCard=$("#managerReopenDayCard");
+  const canReopenDay=["admin","sub_admin","regional_manager"].includes(profile?.role);
+  reopenCard?.classList.toggle("hidden",!canReopenDay);
+  $("#adminGuideReopenDayBtn")?.classList.toggle("hidden",!canReopenDay);
+  if(canReopenDay){
+    const reopenRep=$("#managerReopenRep");
+    if(reopenRep){
+      const keep=reopenRep.value;
+      reopenRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");
+      if(reps.some(r=>r.user_id===keep)) reopenRep.value=keep;
+    }
+    const reopenDate=$("#managerReopenDate");
+    if(reopenDate && !reopenDate.value) reopenDate.value=today();
+  }
   const activeItemGoals=(itemGoals||[]).filter(g=>g.active);
   const activeGoalIds=new Set(activeItemGoals.map(g=>g.id));
   const itemGoalCount=activeItemGoals.length;
@@ -2662,6 +2710,36 @@ window.deactivateRep=async(userId,name)=>{
   const {error}=await sb.from("profiles").update({active:false}).eq("user_id",userId);
   if(error)return alert(error.message);await loadAdmin();
 };
+
+$("#managerReopenDayBtn")?.addEventListener("click",async()=>{
+  const msg=$("#managerReopenDayMsg");
+  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return setMsg(msg,"Você não possui permissão para liberar dias.");
+  const userId=$("#managerReopenRep")?.value||"";
+  const saleDate=$("#managerReopenDate")?.value||"";
+  if(!userId) return setMsg(msg,"Selecione o representante.");
+  if(!saleDate) return setMsg(msg,"Selecione a data.");
+  if(!confirm("Liberar este dia para novos pedidos? Os pedidos já finalizados permanecerão bloqueados e não serão alterados.")) return;
+  const btn=$("#managerReopenDayBtn");
+  btn.disabled=true;
+  const old=btn.textContent;
+  btn.textContent="LIBERANDO...";
+  setMsg(msg,"Liberando o dia...");
+  try{
+    const {data,error}=await sb.rpc("reopen_sales_day",{p_user_id:userId,p_sale_date:saleDate});
+    if(error) throw error;
+    if(data?.already_open){
+      setMsg(msg,`${data.representative||"Representante"}: o dia ${saleDate.split("-").reverse().join("/")} já estava liberado.`);
+    }else{
+      setMsg(msg,`${data?.representative||"Representante"}: dia ${saleDate.split("-").reverse().join("/")} LIBERADO para novos pedidos. Os ${Number(data?.finalized_orders||0)} pedidos já finalizados permanecem bloqueados.`);
+    }
+    await loadAdmin();
+  }catch(err){
+    setMsg(msg,err?.message||"Não foi possível liberar o dia.");
+  }finally{
+    btn.disabled=false;
+    btn.textContent=old;
+  }
+});
 
 $("#refreshBtn").addEventListener("click",loadAdmin);
 $("#adminMonth").addEventListener("change",async()=>{
