@@ -503,7 +503,7 @@ $("#setupForm").addEventListener("submit",async e=>{
 });
 $("#repSignupForm").addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#repSignupMsg"),"");
-  const code=$("#inviteCode").value.trim(),email=$("#repEmail").value.trim().toLowerCase(),password=$("#repPassword").value;
+  const code=$("#inviteCode").value.trim().toLowerCase(),email=$("#repEmail").value.trim().toLowerCase(),password=$("#repPassword").value;
 
   let {data,error}=await sb.auth.signUp({email,password});
 
@@ -517,9 +517,13 @@ $("#repSignupForm").addEventListener("submit",async e=>{
     data=login.data;error=null;
   }
 
-  if(error)return setMsg($("#repSignupMsg"),error.message);
+  if(error){
+    const msg=String(error.message||"");
+    if(/already registered|already been registered|user.*registered/i.test(msg)) return setMsg($("#repSignupMsg"),"Este e-mail já foi iniciado no SAPECE. Digite a mesma senha usada no primeiro cadastro para concluir, ou use Recuperar senha.");
+    return setMsg($("#repSignupMsg"),msg);
+  }
   if(!data?.session){
-    localStorage.setItem("pending_invite_code",code);
+    localStorage.setItem("pending_invite_code",code.toLowerCase());
     return setMsg($("#repSignupMsg"),"Conta criada. Confirme o e-mail e depois entre para concluir o cadastro.","ok");
   }
 
@@ -537,7 +541,7 @@ $("#repSignupForm").addEventListener("submit",async e=>{
 $("#logoutBtn").addEventListener("click",async()=>{await sb.auth.signOut();await boot();});
 
 async function tryPendingInvite(){
-  const code=localStorage.getItem("pending_invite_code");if(!code||!user||profile)return;
+  const code=(localStorage.getItem("pending_invite_code")||"").trim().toLowerCase();if(!code||!user||profile)return;
   const {error}=await sb.rpc("claim_representative_invite",{p_code:code});
   if(!error)localStorage.removeItem("pending_invite_code");await loadProfile();
 }

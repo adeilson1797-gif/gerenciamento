@@ -655,3 +655,10 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - E-mail, senha, datas, números e campos monetários não são alterados.
 - A guia Comissão volta a exibir o histórico completo de comissões informado no período, inclusive registros vinculados a pedidos do dia ainda em standby.
 - Os indicadores gerenciais de vendas continuam considerando somente pedidos finalizados.
+
+
+## v6.3.2.4
+- Corrige cadastro parcial de representantes quando o usuário é criado no Auth antes do perfil.
+- Código de convite passa a ser tratado sem diferença entre maiúsculas e minúsculas.
+- Melhora a mensagem para e-mail já iniciado/cadastrado.
+- Mantém recuperação automática ao repetir o cadastro com a mesma senha.
