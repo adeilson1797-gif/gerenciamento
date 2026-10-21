@@ -2632,3 +2632,77 @@ $("#resetPanelBtn")?.addEventListener("click",async()=>{
   setMsg($("#resetPanelMsg"),"Painel operacional resetado com sucesso. Usuários, acessos e cargos foram preservados.","ok");
   await loadAdmin();
 });
+
+// v6.3.5.1 — restaura rotinas do painel gerencial removidas acidentalmente na v6.3.5
+
+$("#resetPasswordForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const p1=$("#newPassword").value,p2=$("#confirmNewPassword").value;
+  if(p1!==p2)return setMsg($("#resetPasswordMsg"),"As senhas não coincidem.");
+  const {error}=await sb.auth.updateUser({password:p1});
+  if(error)return setMsg($("#resetPasswordMsg"),error.message);
+  try{
+    await loadProfile();
+    if(profile?.must_change_password)await sb.rpc("complete_password_change");
+  }catch(_e){}
+  setMsg($("#resetPasswordMsg"),"Senha atualizada com sucesso.","ok");
+  setTimeout(()=>boot(),800);
+});
+
+sb.auth.onAuthStateChange(async(event,session)=>{
+  if(event==="PASSWORD_RECOVERY"){
+    user=session?.user||null;
+    showOnly("#resetView");
+    $("#logoutBtn").classList.remove("hidden");
+    return;
+  }
+  if(session?.user){
+    user=session.user;
+    await loadProfile();
+  }
+});
+
+function renderAdminSalesHistory(){
+  if(!adminCache.sales)return;
+  const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
+  const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
+  const rows=[...(adminCache.sales||[])]
+    .filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end))
+    .sort((a,b)=>b.sale_date.localeCompare(a.sale_date));
+  $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${escapeHtml(reps[s.user_id]||"Representante")}</td><td>${money(s.amount)}</td><td>${(s.note==="Total automático dos pedidos"||s.note==="Total automático dos pedidos finalizados")?"Pedidos finalizados":escapeHtml(s.note||"—")}</td><td><span class="muted">Consolidado dos pedidos finalizados</span></td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
+}
+["historyRep","historyStart","historyEnd"].forEach(id=>$("#"+id)?.addEventListener("change",renderAdminSalesHistory));
+$("#clearHistoryFilters")?.addEventListener("click",()=>{
+  $("#historyRep").value="";$("#historyStart").value="";$("#historyEnd").value="";renderAdminSalesHistory();
+});
+
+function filteredAdminRows(){
+  const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
+  const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
+  const distNames=Object.fromEntries((adminCache.distributors||[]).map(d=>[String(d.id),d.name]));
+  return [...(adminCache.sales||[])]
+    .filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end))
+    .sort((a,b)=>a.sale_date.localeCompare(b.sale_date))
+    .map(s=>{
+      const distText=(adminCache.salesDistributors||[])
+        .filter(x=>x.user_id===s.user_id&&x.sale_date===s.sale_date)
+        .map(x=>`${distNames[String(x.distributor_id)]||"Distribuidora"}: ${money(x.amount)}`)
+        .join(" | ");
+      return {Data:s.sale_date.split("-").reverse().join("/"),Representante:reps[s.user_id]||"",Distribuidoras:distText||"—",Valor:Number(s.amount||0),Observacao:s.note||""};
+    });
+}
+
+$("#exportXlsxBtn")?.addEventListener("click",()=>{
+  const rows=filteredAdminRows(),ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();
+  ws["!cols"]=[{wch:12},{wch:28},{wch:48},{wch:14},{wch:42}];
+  XLSX.utils.book_append_sheet(wb,ws,"Vendas");
+  XLSX.writeFile(wb,`acompanhamento-gerencial-${adminCache.month}.xlsx`);
+});
+
+$("#printReportBtn")?.addEventListener("click",()=>{
+  const rows=filteredAdminRows(),total=rows.reduce((s,r)=>s+Number(r.Valor||0),0),w=window.open("","_blank");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório</title><style>body{font-family:Arial;padding:28px}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#eef7f1}</style></head><body><h1>SAPECE — Sistema de Apuração de Pedidos e Campanhas</h1><p>Relatório ${escapeHtml(adminCache.month)}</p><table><thead><tr><th>Data</th><th>Representante</th><th>Distribuidoras</th><th>Valor</th><th>Observação</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.Data)}</td><td>${escapeHtml(r.Representante)}</td><td>${escapeHtml(r.Distribuidoras||"—")}</td><td>${money(r.Valor)}</td><td>${escapeHtml(r.Observacao||"—")}</td></tr>`).join("")}</tbody></table><h3>Total: ${money(total)}</h3><p>Projeto pessoal — Especialista Escobar-PB</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+});
+
+boot();
