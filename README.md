@@ -1,3 +1,11 @@
+## SAPECE v6.3.4.1 — revisão de integridade
+
+- Corrige inicialização do painel do representante (`orderDate`).
+- Remove rotinas legadas não usadas de venda diária/distribuição manual.
+- Totais diários ficam somente leitura no frontend e continuam derivados dos pedidos finalizados.
+- Reset administrativo também limpa fechamentos diários (`rep_day_closures`).
+- Backend revisado para preservar integridade dos totais e escopo regional.
+
 SAPECE v6.3.2.3 — correção de cadastro parcial / usuário já registrado
 
 # SAPECE v6.3.2.2
@@ -681,3 +689,34 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Primeiro acesso exige troca de senha.
 - Se o e-mail já existir no Auth mas ainda não tiver perfil, o cadastro é recuperado e concluído.
 - Gerente Regional só pode cadastrar representantes das UFs sob sua gestão.
+
+## v6.3.5 — segurança da interface e cadastros exclusivos do Administrador Geral
+
+- Tela de login simplificada: removidas as abas **Primeiro acesso** e **Representante**.
+- Cadastro por convite/autocadastro removido do frontend.
+- Área de convites removida do painel gerencial.
+- Cadastro de usuários passa a ser exclusivo do **Administrador Geral**.
+- Administrador Geral pode criar diretamente: Representante, Gerente Regional, Subadministrador e Gerente Divisional.
+- Gerentes e Subadministradores não possuem mais opção de cadastrar representantes nem gerar convites.
+- Função `admin-create-user` criada no Supabase e protegida para aceitar somente Administrador Geral ativo.
+- Função antiga `admin-create-representative` descontinuada.
+- Execução pública/autenticada de `bootstrap_admin` e `claim_representative_invite` revogada.
+- RLS de `representative_invites` restringida ao Administrador Geral.
+- Sanitização de textos reforçada nas tabelas, selects e relatórios HTML/PDF para reduzir risco de injeção de HTML/XSS.
+- Ações com exclusão/reset deixaram de carregar nomes livres dentro de `onclick`; os dados são resolvidos pelo ID em memória.
+
+### Matriz de acesso revisada
+
+- **Administrador Geral:** cadastro de usuários, gestão completa, reset de senha, distribuidoras, metas, correções e relatórios.
+- **Subadministrador:** sem cadastro de usuários e sem convites; mantém permissões operacionais já existentes.
+- **Gerente Regional:** sem cadastro de usuários e sem convites; mantém meta pessoal, distribuidoras da região, liberação de dia e gestão regional permitida.
+- **Gerente Divisional:** consulta consolidada, sem cadastros operacionais.
+- **Representante:** pedidos, base de clientes, campanhas e fechamento do dia.
+
+### Validações executadas
+
+- `node --check app.js`: aprovado.
+- Todos os IDs referenciados diretamente no JavaScript existem no HTML: **0 referências ausentes**.
+- Tela de login sem `Primeiro acesso`, sem cadastro de representante e sem painel de convite: aprovado.
+- Políticas de `representative_invites`: somente políticas `invites_admin_*` permanecem.
+- Totais de vendas e campanhas continuam derivados dos pedidos finalizados; nenhuma alteração de dados históricos foi feita nesta versão.

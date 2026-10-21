@@ -1,3 +1,4 @@
+// SAPECE v6.3.5 — segurança da interface + cadastros exclusivos do Administrador Geral
 
 const cfg = window.APP_CONFIG;
 const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY);
@@ -32,15 +33,9 @@ function showOnly(id){
   if(target) target.classList.remove("hidden");
 }
 function setMsg(el,text,type="error"){
+  if(!el)return;
   el.textContent=text||""; el.className="msg "+(text?type:"");
 }
-function pane(name){
-  document.querySelectorAll(".pane").forEach(x=>x.classList.add("hidden"));
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  $("#"+name+"Pane").classList.remove("hidden");
-  document.querySelector(`[data-tab="${name}"]`).classList.add("active");
-}
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>pane(b.dataset.tab)));
 
 function previousDateISO(){
   const d=new Date(); d.setDate(d.getDate()-1); return localISODate(d);
@@ -76,6 +71,7 @@ function businessDayNeed(target,sold,mk){
   return days>0?remaining/days:remaining;
 }
 function escapeCsv(v){ const s=String(v??""); return `"${s.replaceAll('"','""')}"`; }
+function escapeHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");}
 
 function formatBRLInput(value){
   const n=Number(value||0);
@@ -203,10 +199,10 @@ function exportTablePdf(table,title){
   const {headers,rows}=tableRowsForExport(table);
   if(!rows.length)return alert("Não há informações para exportar.");
   const w=window.open("","_blank");
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
   <style>body{font-family:Arial;padding:24px;color:#222}h1{color:#0b6b3a;font-size:22px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#eef7f1}</style>
-  </head><body><h1>${title}</h1><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
-  <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>
+  </head><body><h1>${escapeHtml(title)}</h1><table><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+  <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${escapeHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }
@@ -375,7 +371,7 @@ async function boot(){
   if(!session){
     user=null;profile=null;showOnly("#authView");$("#logoutBtn").classList.add("hidden");$("#sessionName").textContent="";return;
   }
-  user=session.user; await loadProfile(); await tryPendingInvite();
+  user=session.user; await loadProfile();
   if(!profile){showOnly("#authView");$("#sessionName").textContent=user.email||"";$("#logoutBtn").classList.remove("hidden");return;}
   $("#sessionName").textContent=profile.name;$("#logoutBtn").classList.remove("hidden");
   if(profile.must_change_password){
@@ -400,20 +396,9 @@ async function boot(){
     $("#managerRoleBadge").classList.toggle("sub",!isMainAdmin);
     $("#managerRoleBadge").classList.toggle("regional-badge",isRegional);
 
-    $("#adminInviteCard")?.classList.toggle("hidden",isDivisional);
-    $("#manualRepCard")?.classList.toggle("hidden",isDivisional);
-    if(isRegional && $("#manualRepState") && (profile.managed_states||[]).length===1){
-      $("#manualRepState").value=String(profile.managed_states[0]||"").toUpperCase();
-    }
-    if($("#inviteRole")){
-      $("#inviteRole").innerHTML=isMainAdmin
-        ? '<option value="rep">Representante</option><option value="sub_admin">Subadministrador</option><option value="regional_manager">Gerente Regional</option><option value="divisional_manager">Gerente Divisional</option>'
-        : '<option value="rep">Representante</option>';
-      if(isRegional && $("#inviteState") && (profile.managed_states||[]).length===1){
-        $("#inviteState").value=profile.managed_states[0];
-      }
-      updateInviteRoleFields();
-    }
+    // Cadastros de representantes são exclusivos do Administrador Geral.
+    $("#manualRepCard")?.classList.toggle("hidden",!isMainAdmin);
+    if(isMainAdmin) updateManualUserRoleFields();
 
     $("#userManagementCard")?.classList.toggle("hidden",isDivisional);
     $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
@@ -432,7 +417,6 @@ async function boot(){
       "#adminSalesHistoryCard",
       "#itemGoalsTrackingCard",
       "#managerCnpjRankingCard",
-      "#inviteSectionGrid",
       "#legacyEvolutionRankingGrid",
       "#repDistributorBreakdownCard"
     ].forEach(sel=>$(sel)?.classList.toggle("hidden",isDivisional));
@@ -470,7 +454,7 @@ async function boot(){
     showOnly("#repView");
     setRepTab("sales");
     $("#repTitle").textContent=`${profile.job_title?profile.job_title+" — ":""}${profile.name}`;
-    $("#saleDate").value=today();
+    if($("#orderDate")) $("#orderDate").value=today();
     initSalesDateFilters();
     await loadRep();
     enableAutomaticTablePagination();
@@ -502,58 +486,8 @@ $("#forgotBtn").addEventListener("click",async()=>{
   const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
   setMsg($("#loginMsg"),error?error.message:"Link de recuperação enviado.","ok");
 });
-$("#setupForm").addEventListener("submit",async e=>{
-  e.preventDefault();setMsg($("#setupMsg"),"");
-  const name=$("#setupName").value.trim(),email=$("#setupEmail").value.trim(),password=$("#setupPassword").value;
-  const {data,error}=await sb.auth.signUp({email,password}); if(error)return setMsg($("#setupMsg"),error.message);
-  if(!data.session)return setMsg($("#setupMsg"),"Conta criada. Confirme o e-mail e depois entre para concluir.","ok");
-  user=data.user;const {error:rpcErr}=await sb.rpc("bootstrap_admin",{p_name:name});
-  if(rpcErr)return setMsg($("#setupMsg"),rpcErr.message); await boot();
-});
-$("#repSignupForm").addEventListener("submit",async e=>{
-  e.preventDefault();setMsg($("#repSignupMsg"),"");
-  const code=$("#inviteCode").value.trim().toLowerCase(),email=$("#repEmail").value.trim().toLowerCase(),password=$("#repPassword").value;
-
-  let {data,error}=await sb.auth.signUp({email,password});
-
-  // Recupera automaticamente cadastros que ficaram pela metade: o usuário foi criado
-  // no Auth, mas o convite/perfil não chegou a ser concluído.
-  if(error && /already registered|already been registered|user.*registered/i.test(error.message||"")){
-    const login=await sb.auth.signInWithPassword({email,password});
-    if(login.error){
-      return setMsg($("#repSignupMsg"),"Este e-mail já possui acesso no SAPECE. Use a senha cadastrada ou a opção de recuperar senha.");
-    }
-    data=login.data;error=null;
-  }
-
-  if(error){
-    const msg=String(error.message||"");
-    if(/already registered|already been registered|user.*registered/i.test(msg)) return setMsg($("#repSignupMsg"),"Este e-mail já foi iniciado no SAPECE. Digite a mesma senha usada no primeiro cadastro para concluir, ou use Recuperar senha.");
-    return setMsg($("#repSignupMsg"),msg);
-  }
-  if(!data?.session){
-    localStorage.setItem("pending_invite_code",code.toLowerCase());
-    return setMsg($("#repSignupMsg"),"Conta criada. Confirme o e-mail e depois entre para concluir o cadastro.","ok");
-  }
-
-  user=data.user;
-  const {error:rpcErr}=await sb.rpc("claim_representative_invite",{p_code:code});
-  if(rpcErr){
-    if(/já possui perfil/i.test(rpcErr.message||"")){
-      return await boot();
-    }
-    return setMsg($("#repSignupMsg"),rpcErr.message);
-  }
-  localStorage.removeItem("pending_invite_code");
-  await boot();
-});
 $("#logoutBtn").addEventListener("click",async()=>{await sb.auth.signOut();await boot();});
 
-async function tryPendingInvite(){
-  const code=(localStorage.getItem("pending_invite_code")||"").trim().toLowerCase();if(!code||!user||profile)return;
-  const {error}=await sb.rpc("claim_representative_invite",{p_code:code});
-  if(!error)localStorage.removeItem("pending_invite_code");await loadProfile();
-}
 
 
 function setRepTab(tab){
@@ -640,7 +574,7 @@ async function loadClientBase(){
   $("#clientBaseCountBranches").textContent=branches;
 
   const matrixRows=clientBaseCache.filter(c=>c.definition==="rede"&&c.unit_type==="matriz");
-  $("#clientBaseParentMatrix").innerHTML='<option value="">Selecione a matriz...</option>'+matrixRows.map(c=>`<option value="${c.id}">${c.legal_name} — ${formatCNPJ(c.cnpj)}</option>`).join("");
+  $("#clientBaseParentMatrix").innerHTML='<option value="">Selecione a matriz...</option>'+matrixRows.map(c=>`<option value="${c.id}">${escapeHtml(c.legal_name)} — ${formatCNPJ(c.cnpj)}</option>`).join("");
 
   const byId=Object.fromEntries(clientBaseCache.map(c=>[String(c.id),c]));
 
@@ -652,18 +586,18 @@ async function loadClientBase(){
     const matrixName=c.parent_matrix_id?(byId[String(c.parent_matrix_id)]?.legal_name||"Matriz"):"—";
     return `<tr>
       <td><span class="cnpj-chip">${formatCNPJ(c.cnpj)}</span></td>
-      <td><strong>${c.legal_name}</strong></td>
-      <td>${c.city||"—"}</td>
-      <td>${c.state||"—"}</td>
+      <td><strong>${escapeHtml(c.legal_name)}</strong></td>
+      <td>${escapeHtml(c.city||"—")}</td>
+      <td>${escapeHtml(c.state||"—")}</td>
       <td>${definitionLabel}</td>
       <td><span class="client-type-pill ${cls}">${unitLabel}</span></td>
-      <td>${matrixName}</td>
-      <td>${c.buyer_name||"—"}</td>
-      <td>${c.phone||"—"}</td>
-      <td>${c.network_name||"—"}</td>
+      <td>${escapeHtml(matrixName)}</td>
+      <td>${escapeHtml(c.buyer_name||"—")}</td>
+      <td>${escapeHtml(c.phone||"—")}</td>
+      <td>${escapeHtml(c.network_name||"—")}</td>
       <td>
         <button class="btn btn-xs btn-light" onclick="editClientBase(${c.id})">Editar</button>
-        <button class="btn btn-xs btn-light danger" onclick="deleteClientBase(${c.id},'${String(c.legal_name||"").replaceAll("'","&#39;")}')">Excluir</button>
+        <button class="btn btn-xs btn-light danger" onclick="deleteClientBase(${c.id})">Excluir</button>
       </td>
     </tr>`;
   }).join("")||`<tr><td colspan="11">Nenhum cliente cadastrado na base.</td></tr>`;
@@ -716,10 +650,10 @@ function renderClientBaseConflicts(customers,orders){
   card?.classList.remove("hidden");
   $("#clientBaseConflictCount").textContent=`${conflicts.length} conflito(s)`;
   $("#clientBaseConflictTable").innerHTML=conflicts.map(c=>`<tr>
-    <td>${c.origin}</td>
+    <td>${escapeHtml(c.origin)}</td>
     <td><span class="cnpj-chip">${formatCNPJ(c.cnpj)}</span></td>
-    <td>${c.legal_name||"—"}</td>
-    <td><strong>${formatCNPJ(c.base.cnpj)} — ${c.base.legal_name}</strong></td>
+    <td>${escapeHtml(c.legal_name||"—")}</td>
+    <td><strong>${formatCNPJ(c.base.cnpj)} — ${escapeHtml(c.base.legal_name)}</strong></td>
     <td>Revise o cadastro/pedido e mantenha o CNPJ e a Razão exatamente como estão na Base Clientes.</td>
   </tr>`).join("");
 }
@@ -744,7 +678,8 @@ window.editClientBase=(id)=>{
   $("#clientBaseForm").scrollIntoView({behavior:"smooth",block:"start"});
 };
 
-window.deleteClientBase=async(id,name)=>{
+window.deleteClientBase=async(id)=>{
+  const name=clientBaseCache.find(x=>Number(x.id)===Number(id))?.legal_name||"este cliente";
   if(!confirm(`Excluir "${name}" da Base Clientes?`)) return;
   const {error}=await sb.from("client_base").delete().eq("id",id).eq("user_id",user.id);
   if(error){
@@ -789,9 +724,9 @@ $("#clientBaseExportPdfBtn")?.addEventListener("click",()=>{
   const w=window.open("","_blank");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Base Clientes</title>
   <style>body{font-family:Arial;padding:24px;color:#222}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#eef7f1}</style>
-  </head><body><h1>Base Clientes — ${profile?.name||"Representante"}</h1><p>Total de cadastros: ${rows.length}</p>
+  </head><body><h1>Base Clientes — ${escapeHtml(profile?.name||"Representante")}</h1><p>Total de cadastros: ${rows.length}</p>
   <table><thead><tr><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Definição</th><th>Unidade</th><th>Matriz</th><th>Comprador</th><th>Telefone</th><th>Rede</th></tr></thead>
-  <tbody>${rows.map(r=>`<tr><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Cidade}</td><td>${r.Estado}</td><td>${r["Definição"]}</td><td>${r.Unidade}</td><td>${r.Matriz}</td><td>${r.Comprador}</td><td>${r.Telefone}</td><td>${r.Rede}</td></tr>`).join("")}</tbody></table>
+  <tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.CNPJ)}</td><td>${escapeHtml(r["Razão Social"])}</td><td>${escapeHtml(r.Cidade)}</td><td>${escapeHtml(r.Estado)}</td><td>${escapeHtml(r["Definição"])}</td><td>${escapeHtml(r.Unidade)}</td><td>${escapeHtml(r.Matriz)}</td><td>${escapeHtml(r.Comprador)}</td><td>${escapeHtml(r.Telefone)}</td><td>${escapeHtml(r.Rede)}</td></tr>`).join("")}</tbody></table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 });
@@ -902,7 +837,7 @@ async function loadRep(){
   $("#repDailyNeed").textContent=target>0?`Média necessária: ${money(need)}/dia útil`:"Média necessária: —";
   $("#repDaysLeft").textContent=`Dias úteis restantes: ${days}`;
 
-  $("#repHistory").innerHTML=rows.map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${(r.note==="Total automático dos pedidos"||r.note==="Total automático dos pedidos finalizados")?"Pedidos finalizados":(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido no período selecionado.</td></tr>`;
+  $("#repHistory").innerHTML=rows.map(r=>`<tr><td>${r.sale_date.split("-").reverse().join("/")}</td><td>${money(r.amount)}</td><td>${(r.note==="Total automático dos pedidos"||r.note==="Total automático dos pedidos finalizados")?"Pedidos finalizados":escapeHtml(r.note||"—")}</td></tr>`).join("")||`<tr><td colspan="3">Nenhum pedido no período selecionado.</td></tr>`;
 
   await loadRepDistributorSummary();
   await loadRepOrders();
@@ -997,7 +932,7 @@ async function loadRepCampaignProgress(){
     status.textContent=`${rows.length} item(ns)`;
 
     table.innerHTML=rows.map(r=>`<tr>
-      <td><strong>${r.item}</strong></td>
+      <td><strong>${escapeHtml(r.item)}</strong></td>
       <td>${r.target} un.</td>
       <td>${r.sold} un.</td>
       <td>${r.remaining} un.</td>
@@ -1043,12 +978,12 @@ async function loadRepOrders(){
   clientBaseCache=baseClients||[];
 
   const activeDistributors=distributors||[];
-  $("#orderDistributor").innerHTML='<option value="">Selecione...</option>'+activeDistributors.map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
+  $("#orderDistributor").innerHTML='<option value="">Selecione...</option>'+activeDistributors.map(d=>`<option value="${d.id}">${escapeHtml(d.name)}</option>`).join("");
   repOrderDistributorMap=Object.fromEntries(activeDistributors.map(d=>[String(d.id),d.name]));
 
   const orderClients=clientBaseCache.length?clientBaseCache:repCustomersCache;
-  $("#customerCnpjList").innerHTML=orderClients.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${c.legal_name}</option>`).join("");
-  $("#customerNameList").innerHTML=orderClients.map(c=>`<option value="${c.legal_name}">${formatCNPJ(c.cnpj)}</option>`).join("");
+  $("#customerCnpjList").innerHTML=orderClients.map(c=>`<option value="${formatCNPJ(c.cnpj)}">${escapeHtml(c.legal_name)}</option>`).join("");
+  $("#customerNameList").innerHTML=orderClients.map(c=>`<option value="${escapeHtml(c.legal_name)}">${formatCNPJ(c.cnpj)}</option>`).join("");
 
   let campaignRows=[];
   try{
@@ -1075,11 +1010,11 @@ async function loadRepOrders(){
     return `<tr>
       <td>${o.order_date.split("-").reverse().join("/")}</td>
       <td><span class="cnpj-chip">${formatCNPJ(o.cnpj)}</span></td>
-      <td>${o.legal_name}</td>
-      <td>${o.city||"—"}</td>
-      <td>${o.state||"—"}</td>
-      <td>${repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora"}</td>
-      <td>${o.order_number}</td>
+      <td>${escapeHtml(o.legal_name)}</td>
+      <td>${escapeHtml(o.city||"—")}</td>
+      <td>${escapeHtml(o.state||"—")}</td>
+      <td>${escapeHtml(repOrderDistributorMap[String(o.distributor_id)]||"Distribuidora")}</td>
+      <td>${escapeHtml(o.order_number)}</td>
       <td><strong>${Number(o.sku_count||0)}</strong></td>
       <td>${campaign.length?`${campaign.length} item(ns) • ${campaignQty} un.`:"—"}</td>
       <td>${commission>0?money(commission):"—"}</td>
@@ -1214,7 +1149,7 @@ async function loadOrderCampaignItems(dateStr){
     container.innerHTML=orderCampaignGoalCache.length?orderCampaignGoalCache.map(g=>`
       <div class="campaign-order-item" data-campaign-goal="${g.id}">
         <div class="campaign-item-title">
-          <strong>${g.item_name}</strong>
+          <strong>${escapeHtml(g.item_name)}</strong>
           <small>Meta: ${Number(g.target_quantity||0)} un.</small>
         </div>
         <div>
@@ -1356,7 +1291,7 @@ function renderRepCnpjRanking(){
   table.innerHTML=rows.map((r,i)=>`<tr>
     <td><span class="rank-badge">${i+1}º</span></td>
     <td>${r.cnpj?`<span class="cnpj-chip">${formatCNPJ(r.cnpj)}</span>`:"—"}</td>
-    <td><strong>${r.legal_name}</strong></td>
+    <td><strong>${escapeHtml(r.legal_name)}</strong></td>
     <td>${r.orders}</td>
     <td><strong>${money(r.total)}</strong></td>
   </tr>`).join("")||`<tr><td colspan="5">Nenhum cliente com pedido no período selecionado.</td></tr>`;
@@ -1586,9 +1521,9 @@ $("#repExportPdfBtn")?.addEventListener("click",()=>{
   const w=window.open("","_blank");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Minhas vendas</title>
   <style>body{font-family:Arial;padding:28px;color:#222}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#eef7f1}.total{margin-top:16px;font-size:18px;font-weight:bold}</style>
-  </head><body><h1>Minhas vendas — ${profile?.name||"Representante"}</h1><p>Período: ${monthNow()}</p>
+  </head><body><h1>Minhas vendas — ${escapeHtml(profile?.name||"Representante")}</h1><p>Período: ${monthNow()}</p>
   <table><thead><tr><th>Data</th><th>CNPJ</th><th>Razão Social</th><th>Cidade</th><th>Estado</th><th>Distribuidora</th><th>Pedido</th><th>SKUs</th><th>Campanha</th><th>Comissão</th><th>Valor</th></tr></thead>
-  <tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.CNPJ}</td><td>${r["Razão Social"]}</td><td>${r.Cidade||"—"}</td><td>${r.Estado||"—"}</td><td>${r.Distribuidora}</td><td>${r["Número do Pedido"]}</td><td>${r.SKUs}</td><td>${r["Itens em Campanha"]} item(ns) / ${r["Qtd Campanha"]} un.</td><td>${money(r["Comissão"])}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
+  <tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.Data)}</td><td>${escapeHtml(r.CNPJ)}</td><td>${escapeHtml(r["Razão Social"])}</td><td>${escapeHtml(r.Cidade||"—")}</td><td>${escapeHtml(r.Estado||"—")}</td><td>${escapeHtml(r.Distribuidora)}</td><td>${escapeHtml(r["Número do Pedido"])}</td><td>${escapeHtml(r.SKUs)}</td><td>${escapeHtml(r["Itens em Campanha"])} item(ns) / ${escapeHtml(r["Qtd Campanha"])} un.</td><td>${money(r["Comissão"])}</td><td>${money(r.Valor)}</td></tr>`).join("")}</tbody></table>
   <div class="total">Total: ${money(total)}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 });
@@ -1614,215 +1549,15 @@ async function loadRepDistributorSummary(){
   });
   const list=Object.values(grouped).filter(x=>x.month>0||x.today>0).sort((a,b)=>b.month-a.month);
   $("#repDistributorSummaryTable").innerHTML=list.map(x=>`<tr>
-    <td><strong>${x.name}</strong></td>
+    <td><strong>${escapeHtml(x.name)}</strong></td>
     <td>${money(x.today)}</td>
     <td>${money(x.month)}</td>
     <td>${periodTotal>0?percent(x.month/periodTotal):"—"}</td>
   </tr>`).join("")||`<tr><td colspan="4">Nenhuma venda por distribuidora no período.</td></tr>`;
 }
 
-async function loadRepDistributors(dateStr){
-  if(!user || profile?.role!=="rep") return;
-  setMsg($("#repDistributorMsg"),"");
-  const [{data:distributors,error:dErr},{data:rows,error:rErr}] = await Promise.all([
-    sb.from("distributors").select("*").eq("active",true).order("name"),
-    sb.from("daily_sales_distributors").select("*").eq("user_id",user.id).eq("sale_date",dateStr)
-  ]);
-  if(dErr||rErr){
-    setMsg($("#repDistributorMsg"),(dErr||rErr).message);
-    return;
-  }
-  repDistributorCache=distributors||[];
-  const wrap=$("#repDistributorRows");
-  wrap.innerHTML="";
-  if((rows||[]).length){
-    (rows||[]).forEach(r=>addDistributorEntryRow(r.distributor_id,Number(r.amount||0)));
-  } else if(repDistributorCache.length){
-    addDistributorEntryRow("", "");
-  } else {
-    wrap.innerHTML='<div class="muted">Nenhuma distribuidora ativa cadastrada. Solicite ao gestor.</div>';
-  }
-  updateDistributorTotal();
-}
-
-function distributorOptions(selected=""){
-  return '<option value="">Selecione...</option>'+repDistributorCache.map(d=>`<option value="${d.id}" ${String(d.id)===String(selected)?"selected":""}>${d.name}</option>`).join("");
-}
-
-function addDistributorEntryRow(distributorId="",amount=""){
-  if(!repDistributorCache.length) return;
-  const row=document.createElement("div");
-  row.className="distributor-entry-row";
-  row.innerHTML=`
-    <div><label>Distribuidora</label><select class="dist-select">${distributorOptions(distributorId)}</select></div>
-    <div><label>Valor vendido (R$)</label><input class="dist-amount money-input" type="text" inputmode="numeric" value="${amount!==""?formatBRLInput(Number(amount)):""}" placeholder="R$ 0,00" autocomplete="off"></div>
-    <button class="btn btn-light btn-xs remove-row" type="button">Remover</button>`;
-  row.querySelector(".dist-amount").addEventListener("input",updateDistributorTotal);
-  row.querySelector(".dist-select").addEventListener("change",updateDistributorTotal);
-  row.querySelector(".remove-row").addEventListener("click",()=>{row.remove();updateDistributorTotal();});
-  $("#repDistributorRows").appendChild(row);
-}
-
-function updateDistributorTotal(){
-  const total=[...document.querySelectorAll("#repDistributorRows .dist-amount")]
-    .reduce((s,i)=>s+parseCurrencyInput(i.value),0);
-  $("#saleAmount").value=total.toFixed(2);
-}
-
-function collectDistributorBreakdown(){
-  const rows=[...document.querySelectorAll("#repDistributorRows .distributor-entry-row")];
-  const data=[];
-  const used=new Set();
-  for(const row of rows){
-    const distributor_id=Number(row.querySelector(".dist-select")?.value||0);
-    const amount=parseCurrencyInput(row.querySelector(".dist-amount")?.value);
-    if(!distributor_id && !amount) continue;
-    if(!distributor_id) return {ok:false,message:"Selecione a distribuidora em todas as linhas preenchidas."};
-    if(amount<=0) return {ok:false,message:"Informe um valor maior que zero para cada distribuidora selecionada."};
-    if(used.has(distributor_id)) return {ok:false,message:"A mesma distribuidora foi selecionada mais de uma vez. Use apenas uma linha por distribuidora."};
-    used.add(distributor_id);
-    data.push({distributor_id,amount:Number(amount.toFixed(2))});
-  }
-  return {ok:true,data};
-}
-
-$("#addDistributorRowBtn")?.addEventListener("click",()=>addDistributorEntryRow());
-
-async function loadRepItemGoals(dateStr){
-  if(!user || profile?.role!=="rep") return;
-  setMsg($("#repItemGoalsMsg"),"");
-
-  const {data:goals,error:gErr}=await sb.from("item_goals")
-    .select("*")
-    .eq("active",true)
-    .lte("start_date",dateStr)
-    .gte("end_date",dateStr)
-    .order("item_name");
-
-  if(gErr){
-    setMsg($("#repItemGoalsMsg"),gErr.message);
-    return;
-  }
-
-  const myGoals=(goals||[]).filter(g=>!g.assigned_user_id||g.assigned_user_id===user.id);
-  let reports=[];
-  if(myGoals.length){
-    const ids=myGoals.map(g=>g.id);
-    const minStart=myGoals.reduce((m,g)=>!m||g.start_date<m?g.start_date:m,null);
-    const maxEnd=myGoals.reduce((m,g)=>!m||g.end_date>m?g.end_date:m,null);
-    const {data:rData,error:rErr}=await sb.from("item_goal_reports")
-      .select("*")
-      .eq("user_id",user.id)
-      .in("goal_id",ids)
-      .gte("report_date",minStart)
-      .lte("report_date",maxEnd);
-    if(rErr){
-      setMsg($("#repItemGoalsMsg"),rErr.message);
-      return;
-    }
-    reports=rData||[];
-  }
-
-  const todayMap=Object.fromEntries(reports.filter(r=>r.report_date===dateStr).map(r=>[r.goal_id,r]));
-  repGoalCache=myGoals.map(g=>({
-    goal:g,
-    report:todayMap[g.id]||null,
-    periodSold:reports.filter(r=>r.goal_id===g.id).reduce((s,r)=>s+Number(r.quantity||0),0)
-  }));
-
-  const wrap=$("#repItemGoals");
-  if(!repGoalCache.length){
-    wrap.innerHTML='<div class="muted">Nenhuma meta individual por item ativa para esta data.</div>';
-    $("#repItemGoalCountTable").innerHTML='<tr><td colspan="5">Nenhuma meta ativa.</td></tr>';
-    $("#repItemGoalStatus").textContent="Sem metas hoje";
-    return;
-  }
-
-  wrap.innerHTML=repGoalCache.map(({goal,report,periodSold})=>{
-    const sold=report?.sold===true, no=report?.sold===false, qty=Number(report?.quantity||0);
-    const target=Number(goal.target_quantity||0);
-    const pct=target>0?periodSold/target:0;
-    return `<div class="goal-report-item ${report?"goal-complete":""}" data-goal-id="${goal.id}">
-      <h3>${goal.item_name}</h3>
-      <div class="goal-meta"><strong>Minha meta: ${target} un.</strong> • ${goal.start_date.split("-").reverse().join("/")} a ${goal.end_date.split("-").reverse().join("/")}</div>
-      <div class="goal-progress-text"><span>Realizado: <strong>${periodSold} un.</strong></span><span>${target>0?percent(pct):"—"}</span></div>
-      <div class="progress-mini"><i style="width:${Math.min(pct*100,100)}%"></i></div>
-      <div class="goal-choice">
-        <label><input type="radio" name="goal_${goal.id}" value="yes" ${sold?"checked":""}> Vendi hoje</label>
-        <label><input type="radio" name="goal_${goal.id}" value="no" ${no?"checked":""}> Não vendi hoje</label>
-      </div>
-      <div class="goal-qty ${sold?"":"hidden"}">
-        <label>Quantidade vendida hoje</label>
-        <input type="number" min="1" step="1" class="goal-qty-input" value="${sold?qty:""}" placeholder="Quantidade">
-      </div>
-    </div>`;
-  }).join("");
-
-  repGoalCache.forEach(({goal})=>{
-    document.querySelectorAll(`input[name="goal_${goal.id}"]`).forEach(r=>r.addEventListener("change",()=>{
-      const box=document.querySelector(`[data-goal-id="${goal.id}"]`);
-      box.querySelector(".goal-qty").classList.toggle("hidden",r.value!=="yes"||!r.checked);
-    }));
-  });
-
-  renderRepItemGoalCount();
-  const done=repGoalCache.filter(x=>x.report).length;
-  $("#repItemGoalStatus").textContent=`${done}/${repGoalCache.length} informados`;
-}
-
-
-function renderRepItemGoalCount(){
-  const rows=(repGoalCache||[]).map(({goal,periodSold})=>{
-    const target=Number(goal.target_quantity||0);
-    const sold=Number(periodSold||0);
-    return {
-      item:goal.item_name,
-      target,
-      sold,
-      remaining:Math.max(target-sold,0),
-      pct:target>0?sold/target:0
-    };
-  }).sort((a,b)=>b.pct-a.pct||b.sold-a.sold);
-
-  $("#repItemGoalCountTable").innerHTML=rows.map(r=>`<tr>
-    <td><strong>${r.item}</strong></td>
-    <td>${r.target} un.</td>
-    <td>${r.sold} un.</td>
-    <td>${r.remaining} un.</td>
-    <td><strong>${percent(r.pct)}</strong><div class="progress-mini"><i style="width:${Math.min(r.pct*100,100)}%"></i></div></td>
-  </tr>`).join("")||`<tr><td colspan="5">Nenhuma meta ativa.</td></tr>`;
-}
-
-async function saveRequiredItemGoalReports(dateStr){
-  if(!repGoalCache.length) return {ok:true};
-  const rows=[];
-  for(const {goal} of repGoalCache){
-    const chosen=document.querySelector(`input[name="goal_${goal.id}"]:checked`);
-    if(!chosen) return {ok:false,message:`Informe se vendeu ou não o item "${goal.item_name}".`};
-    const sold=chosen.value==="yes";
-    let qty=0;
-    if(sold){
-      const input=document.querySelector(`[data-goal-id="${goal.id}"] .goal-qty-input`);
-      qty=Number(input?.value||0);
-      if(!Number.isInteger(qty)||qty<=0) return {ok:false,message:`Informe uma quantidade válida para "${goal.item_name}".`};
-    }
-    rows.push({goal_id:goal.id,user_id:user.id,report_date:dateStr,sold,quantity:qty});
-  }
-  const {error}=await sb.from("item_goal_reports").upsert(rows,{onConflict:"goal_id,user_id,report_date"});
-  if(error) return {ok:false,message:error.message};
-  return {ok:true};
-}
-
-$("#saleDate")?.addEventListener("change",()=>loadRepItemGoals($("#saleDate").value));
-
-$("#saveItemGoalsBtn")?.addEventListener("click",async()=>{
-  setMsg($("#repItemGoalsMsg"),"");
-  const dateStr=$("#saleDate").value||today();
-  const result=await saveRequiredItemGoalReports(dateStr);
-  if(!result.ok)return setMsg($("#repItemGoalsMsg"),result.message);
-  setMsg($("#repItemGoalsMsg"),"Informações dos itens salvas com sucesso.","ok");
-  await loadRepItemGoals(dateStr);
-});
+// v6.3.4.1 — rotinas legadas de lançamento diário/distribuição manual removidas.
+// O fluxo oficial é exclusivamente por sales_orders + fechamento do dia.
 
 async function loadAdmin(){
   const mk=$("#adminMonth").value||monthNow();
@@ -1832,7 +1567,6 @@ async function loadAdmin(){
   const [
     {data:profiles,error:pErr},
     {data:sales,error:sErr},
-    {data:invites,error:iErr},
     {data:itemGoals,error:gErr},
     {data:itemReports,error:grErr},
     {data:distributors,error:dErr},
@@ -1844,7 +1578,6 @@ async function loadAdmin(){
   ]=await Promise.all([
     sb.from("profiles").select("*").order("name"),
     sb.from("daily_sales").select("*").gte("sale_date",start).lte("sale_date",end),
-    profile.role==="divisional_manager" ? Promise.resolve({data:[],error:null}) : sb.from("representative_invites").select("*").order("created_at",{ascending:false}).limit(20),
     sb.from("item_goals").select("*").order("created_at",{ascending:false}),
     sb.from("item_goal_reports").select("*").gte("report_date",start).lte("report_date",end),
     sb.from("distributors").select("*").order("name"),
@@ -1854,13 +1587,13 @@ async function loadAdmin(){
     sb.from("customers").select("*"),
     sb.from("order_campaign_items").select("*").gte("report_date",start).lte("report_date",end)
   ]);
-  if(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr){console.error(pErr||sErr||iErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr);return;}
+  if(pErr||sErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr){console.error(pErr||sErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr);return;}
   const allProfiles=profiles||[];
   const reps=allProfiles.filter(r=>r.role==="rep"&&r.active), map={};
   const goalRep=$("#goalRep");
   if(goalRep){
     const keep=goalRep.value;
-    goalRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");
+    goalRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${escapeHtml(r.name)}</option>`).join("");
     if(reps.some(r=>r.user_id===keep)) goalRep.value=keep;
   }
   (sales||[]).forEach(s=>{map[s.user_id]||={month:0,today:0,last:null,hasToday:false};map[s.user_id].month+=Number(s.amount||0);if(s.sale_date===today()){map[s.user_id].today+=Number(s.amount||0);map[s.user_id].hasToday=true;}if(!map[s.user_id].last||s.sale_date>map[s.user_id].last)map[s.user_id].last=s.sale_date;});
@@ -1913,7 +1646,7 @@ async function loadAdmin(){
     const reopenRep=$("#managerReopenRep");
     if(reopenRep){
       const keep=reopenRep.value;
-      reopenRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");
+      reopenRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${escapeHtml(r.name)}</option>`).join("");
       if(reps.some(r=>r.user_id===keep)) reopenRep.value=keep;
     }
     const reopenDate=$("#managerReopenDate");
@@ -1937,7 +1670,7 @@ async function loadAdmin(){
     const statusClass=!s.hasToday?"pending":(s.today>0?"sale":"zero");
     const statusText=!s.hasToday?"Pendente":(s.today>0?"Com venda":"Sem venda");
     return `<tr>
-      <td><span class="rank-badge">${idx+1}</span></td><td>${r.name}</td>
+      <td><span class="rank-badge">${idx+1}</span></td><td>${escapeHtml(r.name)}</td>
       <td><span class="status ${statusClass}">${statusText}</span></td>
       <td>${money(s.today)}</td>
       <td>${money(s.month)}</td>
@@ -1954,18 +1687,12 @@ async function loadAdmin(){
     </tr>`;
   }).join("")||`<tr><td colspan="11">Nenhum representante cadastrado.</td></tr>`;
 
-  const historyRep=$("#historyRep"); if(historyRep){const keep=historyRep.value;historyRep.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");historyRep.value=keep;}
+  const historyRep=$("#historyRep"); if(historyRep){const keep=historyRep.value;historyRep.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${escapeHtml(r.name)}</option>`).join("");historyRep.value=keep;}
   $("#rankingTable").innerHTML=ranked.map((r,idx)=>{
     const sold=map[r.user_id]?.month||0,target=Number(r.monthly_target||0);
-    return `<tr><td>${idx+1}º</td><td>${r.name}</td><td>${money(sold)}</td><td>${target>0?percent(sold/target):"—"}</td></tr>`;
+    return `<tr><td>${idx+1}º</td><td>${escapeHtml(r.name)}</td><td>${money(sold)}</td><td>${target>0?percent(sold/target):"—"}</td></tr>`;
   }).join("")||`<tr><td colspan="4">Sem dados.</td></tr>`;
 
-  $("#inviteList").innerHTML=(invites||[]).map(i=>`<tr>
-    <td>${i.representative_name}</td>
-    <td>${i.invite_role==="sub_admin"?"Subadministrador":i.invite_role==="regional_manager"?"Gerente Regional":i.invite_role==="divisional_manager"?"Gerente Divisional":"Representante"}</td>
-    <td>${i.code.slice(0,10)}…</td>
-    <td>${i.used_by?"Utilizado":(i.active?"Disponível":"Inativo")}</td>
-  </tr>`).join("")||`<tr><td colspan="4">Nenhum convite criado.</td></tr>`;
   const finalizedOrderIds=new Set((orders||[]).map(o=>String(o.id)));
   const finalizedCampaignItems=(orderCampaignItems||[]).filter(i=>finalizedOrderIds.has(String(i.order_id)));
   // Vendas gerenciais continuam considerando apenas pedidos finalizados.
@@ -2009,8 +1736,8 @@ function renderDivisionalSummary(){
   }).sort((a,b)=>b.sold-a.sold);
 
   table.innerHTML=rows.map(r=>`<tr>
-    <td><strong>${r.name}</strong></td>
-    <td>${r.states.join(", ")||"—"}</td>
+    <td><strong>${escapeHtml(r.name)}</strong></td>
+    <td>${escapeHtml(r.states.join(", ")||"—")}</td>
     <td>${r.reps}</td>
     <td>${money(r.sold)}</td>
     <td>${money(r.target)}</td>
@@ -2050,7 +1777,7 @@ function renderDivisionalStateResults(){
   }).sort((a,b)=>b.month-a.month);
 
   table.innerHTML=rows.map(r=>`<tr>
-    <td><strong>${r.state}</strong></td>
+    <td><strong>${escapeHtml(r.state)}</strong></td>
     <td>${r.reps}</td>
     <td>${money(r.today)}</td>
     <td><strong>${money(r.month)}</strong></td>
@@ -2144,8 +1871,8 @@ function renderDivisionalItemGoals(){
 
   const rows=Object.values(grouped).sort((a,b)=>b.pct-a.pct||b.sold-a.sold);
   table.innerHTML=rows.map(r=>`<tr>
-    <td><strong>${r.state}</strong></td>
-    <td>${r.manager}</td>
+    <td><strong>${escapeHtml(r.state)}</strong></td>
+    <td>${escapeHtml(r.manager)}</td>
     <td>${r.goalCount}</td>
     <td>${r.target} un.</td>
     <td>${r.sold} un.</td>
@@ -2200,8 +1927,8 @@ function renderUserManagement(){
   const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id && p.role!=="admin");
 
   $("#userManagementTable").innerHTML=rows.map(p=>`<tr>
-    <td>${isMainAdmin?`<input class="inline-edit user-name" data-id="${p.user_id}" value="${String(p.name||"").replaceAll('"','&quot;')}">`:`<strong>${p.name}</strong>`}</td>
-    <td><input class="inline-edit user-title" data-id="${p.user_id}" value="${String(p.job_title||"").replaceAll('"','&quot;')}" placeholder="Ex.: Especialista, Supervisor"></td>
+    <td>${isMainAdmin?`<input class="inline-edit user-name" data-id="${p.user_id}" value="${escapeHtml(p.name||"")}">`:`<strong>${escapeHtml(p.name)}</strong>`}</td>
+    <td><input class="inline-edit user-title" data-id="${p.user_id}" value="${escapeHtml(p.job_title||"")}" placeholder="Ex.: Especialista, Supervisor"></td>
     <td>${isMainAdmin
       ? `<select class="inline-edit role-select user-role" data-id="${p.user_id}">
           <option value="rep" ${p.role==="rep"?"selected":""}>Usuário / Especialista</option>
@@ -2212,14 +1939,14 @@ function renderUserManagement(){
       : `<strong>${roleLabel(p.role)}</strong><span class="restricted-note">Somente o Administrador Geral altera o perfil de acesso.</span>`}</td>
     <td>${isMainAdmin
       ? `<div class="region-field-stack">
-          <input class="inline-edit user-state" data-id="${p.user_id}" maxlength="2" value="${String(p.state_code||"").replaceAll('"','&quot;')}" placeholder="Estado do representante: PB">
-          <input class="inline-edit user-managed-states" data-id="${p.user_id}" value="${String((p.managed_states||[]).join(', ')).replaceAll('"','&quot;')}" placeholder="Regiões do gerente: PB, CE">
+          <input class="inline-edit user-state" data-id="${p.user_id}" maxlength="2" value="${escapeHtml(p.state_code||"")}" placeholder="Estado do representante: PB">
+          <input class="inline-edit user-managed-states" data-id="${p.user_id}" value="${escapeHtml((p.managed_states||[]).join(', '))}" placeholder="Regiões do gerente: PB, CE">
           <small>Use Estado para representante e Regiões para Gerente Regional.</small>
          </div>`
-      : `<span>${p.role==="regional_manager"?(p.managed_states||[]).join(", "):p.role==="divisional_manager"?"Todas as regiões":(p.state_code||"—")}</span>`}</td>
+      : `<span>${escapeHtml(p.role==="regional_manager"?(p.managed_states||[]).join(", "):p.role==="divisional_manager"?"Todas as regiões":(p.state_code||"—"))}</span>`}</td>
     <td><input class="inline-edit user-target money-input" data-id="${p.user_id}" type="text" inputmode="numeric" value="${formatBRLInput(Number(p.monthly_target||0))}" autocomplete="off"></td>
     <td><span class="${p.active?"user-status-active":"user-status-inactive"}">${p.active?"Ativo":"Inativo"}</span>${p.must_change_password?'<span class="force-password-note">Troca de senha pendente</span>':''}</td>
-    <td>${isMainAdmin?`<button class="btn btn-xs btn-light" onclick="resetUserPassword('${p.user_id}','${String(p.name||"").replaceAll("'","&#39;")}')">Resetar senha</button>`:'—'}</td>
+    <td>${isMainAdmin?`<button class="btn btn-xs btn-light" onclick="resetUserPassword('${p.user_id}')">Resetar senha</button>`:'—'}</td>
     <td>
       <button class="btn btn-xs btn-primary" onclick="saveUserManagement('${p.user_id}',${p.active})">Salvar</button>
       ${isMainAdmin?`<button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button>`:""}
@@ -2308,8 +2035,8 @@ function renderSkuRanking(){
 
   table.innerHTML=rows.map((r,i)=>`<tr>
     <td><span class="rank-badge">${i+1}º</span>${i===0?'<span class="sku-champion">Maior horizontalização</span>':""}</td>
-    <td><strong>${r.name}</strong></td>
-    <td>${r.state}</td>
+    <td><strong>${escapeHtml(r.name)}</strong></td>
+    <td>${escapeHtml(r.state)}</td>
     <td>${r.orders}</td>
     <td><strong>${r.skus}</strong></td>
     <td>${r.avg.toFixed(1).replace(".",",")}</td>
@@ -2339,8 +2066,8 @@ function renderItemPerformance(){
 
   $("#itemPerformanceTable").innerHTML=rows.map((r,i)=>`<tr>
     <td><span class="rank-badge">${i+1}</span></td>
-    <td><strong>${r.rep}</strong></td>
-    <td><strong>${r.item}</strong><br><small class="muted">Cadastro #${r.id}</small></td>
+    <td><strong>${escapeHtml(r.rep)}</strong></td>
+    <td><strong>${escapeHtml(r.item)}</strong><br><small class="muted">Cadastro #${r.id}</small></td>
     <td>${r.target} un.</td>
     <td>${r.sold} un.</td>
     <td>${r.remaining} un.</td>
@@ -2358,16 +2085,16 @@ function renderDistributorManager(){
     const canDelete=canEditAll||ownRegional;
     const region=(d.region_states||[]).length?(d.region_states||[]).join(", "):"GLOBAL";
     const nameCell=canEdit
-      ? `<input class="inline-edit distributor-name-edit" data-id="${d.id}" value="${String(d.name||"").replaceAll('"','&quot;')}">`
-      : `<strong>${d.name||"—"}</strong>`;
+      ? `<input class="inline-edit distributor-name-edit" data-id="${d.id}" value="${escapeHtml(d.name||"")}">`
+      : `<strong>${escapeHtml(d.name||"—")}</strong>`;
     const actions=canEdit
       ? `<button class="btn btn-xs btn-primary" onclick="saveDistributorName(${d.id})">Salvar nome</button>
          <button class="btn btn-xs btn-light ${d.active?"danger":""}" onclick="toggleDistributor(${d.id},${d.active})">${d.active?"Desativar":"Ativar"}</button>
-         ${canDelete?`<button class="btn btn-xs btn-danger" onclick="deleteDistributor(${d.id},'${String(d.name||"").replaceAll("'","&#39;")}')">Apagar</button>`:""}`
+         ${canDelete?`<button class="btn btn-xs btn-danger" onclick="deleteDistributor(${d.id})">Apagar</button>`:""}`
       : '<span class="muted">Disponível na sua região</span>';
     return `<tr>
       <td>${nameCell}</td>
-      <td><strong>${region}</strong></td>
+      <td><strong>${escapeHtml(region)}</strong></td>
       <td><span class="${d.active?"user-status-active":"user-status-inactive"}">${d.active?"Ativa":"Inativa"}</span></td>
       <td>${actions}</td>
     </tr>`;
@@ -2385,7 +2112,7 @@ function distributorSummaryForRep(userId){
   });
   const parts=Object.entries(grouped)
     .sort((a,b)=>b[1]-a[1])
-    .map(([id,total])=>`<div><strong>${distNames[id]||"Distribuidora"}:</strong> ${money(total)}</div>`);
+    .map(([id,total])=>`<div><strong>${escapeHtml(distNames[id]||"Distribuidora")}:</strong> ${money(total)}</div>`);
   return parts.join("")||'<span class="muted-line">Sem divisão informada</span>';
 }
 
@@ -2402,7 +2129,7 @@ function renderPositiveCnpjSummary(){
   const select=$("#positiveCnpjRepFilter");
   if(select){
     const keep=select.value;
-    select.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");
+    select.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${escapeHtml(r.name)}</option>`).join("");
     if(reps.some(r=>r.user_id===keep))select.value=keep;
   }
 
@@ -2426,8 +2153,8 @@ function renderPositiveCnpjSummary(){
   $("#positiveCnpjSales").textContent=money(rows.reduce((s,r)=>s+r.total,0));
 
   table.innerHTML=rows.map(r=>`<tr>
-    <td><strong>${r.rep.name}</strong></td>
-    <td>${r.rep.state_code||"—"}</td>
+    <td><strong>${escapeHtml(r.rep.name)}</strong></td>
+    <td>${escapeHtml(r.rep.state_code||"—")}</td>
     <td><strong>${r.cnpjs}</strong></td>
     <td>${r.orders}</td>
     <td>${money(r.total)}</td>
@@ -2452,13 +2179,13 @@ function renderManagerOrders(){
 
   table.innerHTML=rows.map(o=>`<tr>
     <td>${o.order_date.split("-").reverse().join("/")}</td>
-    <td>${reps[o.user_id]?.name||"Representante"}</td>
+    <td>${escapeHtml(reps[o.user_id]?.name||"Representante")}</td>
     <td>${formatCNPJ(o.cnpj)}</td>
-    <td>${o.legal_name}</td>
-    <td>${dists[String(o.distributor_id)]||"Distribuidora"}</td>
-    <td>${o.order_number}</td>
+    <td>${escapeHtml(o.legal_name)}</td>
+    <td>${escapeHtml(dists[String(o.distributor_id)]||"Distribuidora")}</td>
+    <td>${escapeHtml(o.order_number)}</td>
     <td>${money(o.amount)}</td>
-    <td>${canDelete?`<button class="btn btn-xs btn-light danger" type="button" onclick="deleteManagerOrder(${o.id},'${String(o.order_number||"").replaceAll("'","&#39;")}','${String(o.legal_name||"").replaceAll("'","&#39;")}',${Number(o.amount||0)})">Apagar</button>`:'<span class="muted">Consulta</span>'}</td>
+    <td>${canDelete?`<button class="btn btn-xs btn-light danger" type="button" onclick="deleteManagerOrder(${o.id})">Apagar</button>`:'<span class="muted">Consulta</span>'}</td>
   </tr>`).join("")||`<tr><td colspan="8">Nenhum pedido no período.</td></tr>`;
 }
 
@@ -2512,7 +2239,7 @@ function renderCommissionGuide(){
   const repSelect=$("#commissionRepFilter");
   if(repSelect){
     const keep=repSelect.value;
-    repSelect.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${r.name}</option>`).join("");
+    repSelect.innerHTML='<option value="">Todos os representantes</option>'+reps.map(r=>`<option value="${r.user_id}">${escapeHtml(r.name)}</option>`).join("");
     if(reps.some(r=>r.user_id===keep))repSelect.value=keep;
   }
 
@@ -2525,7 +2252,7 @@ function renderCommissionGuide(){
   const itemSelect=$("#commissionItemFilter");
   if(itemSelect){
     const keep=itemSelect.value;
-    itemSelect.innerHTML='<option value="">Todos os itens</option>'+items.map(x=>`<option value="${x}">${x}</option>`).join("");
+    itemSelect.innerHTML='<option value="">Todos os itens</option>'+items.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
     if(items.includes(keep))itemSelect.value=keep;
   }
 
@@ -2536,12 +2263,12 @@ function renderCommissionGuide(){
 
   $("#commissionTable").innerHTML=rows.map(r=>`<tr>
     <td>${r.date?.split("-").reverse().join("/")||"—"}</td>
-    <td>${r.rep}</td>
+    <td>${escapeHtml(r.rep)}</td>
     <td>${r.cnpj?formatCNPJ(r.cnpj):"—"}</td>
-    <td><strong>${r.client||"—"}</strong></td>
-    <td>${r.item}</td>
+    <td><strong>${escapeHtml(r.client||"—")}</strong></td>
+    <td>${escapeHtml(r.item)}</td>
     <td>${r.qty}</td>
-    <td>${r.orderNumber}</td>
+    <td>${escapeHtml(r.orderNumber)}</td>
     <td><strong>${money(r.commission)}</strong></td>
   </tr>`).join("")||`<tr><td colspan="8">Nenhum cliente com comissão informada no período.</td></tr>`;
 }
@@ -2563,7 +2290,7 @@ function renderManagerCnpjRanking(){
   $("#managerCnpjRankingTable").innerHTML=ranking.map((r,i)=>`<tr>
     <td>${i+1}º</td>
     <td><span class="cnpj-chip">${formatCNPJ(r.cnpj)}</span></td>
-    <td>${r.legal_name}</td>
+    <td>${escapeHtml(r.legal_name)}</td>
     <td>${r.count}</td>
     <td>${r.reps.size}</td>
     <td><strong>${money(r.total)}</strong></td>
@@ -2599,8 +2326,8 @@ function renderRepDistributorBreakdown(){
   table.sort((a,b)=>a.rep.localeCompare(b.rep)||b.month-a.month);
 
   $("#repDistributorBreakdownTable").innerHTML=table.map(r=>`<tr>
-    <td><strong>${r.rep}</strong></td>
-    <td>${r.distributor}</td>
+    <td><strong>${escapeHtml(r.rep)}</strong></td>
+    <td>${escapeHtml(r.distributor)}</td>
     <td>${money(r.today)}</td>
     <td>${money(r.month)}</td>
     <td>${percent(r.pct)}</td>
@@ -2617,7 +2344,7 @@ function renderDistributorSales(){
     const total=distRows.reduce((s,r)=>s+Number(r.amount||0),0);
     const pct=monthTotal>0?total/monthTotal:0;
     return `<tr>
-      <td><strong>${d.name}</strong></td>
+      <td><strong>${escapeHtml(d.name)}</strong></td>
       <td>${money(todayTotal)}</td>
       <td>${money(total)}</td>
       <td>${monthTotal>0?percent(pct):"—"}</td>
@@ -2667,7 +2394,8 @@ window.saveDistributorName=async(id)=>{
   await loadAdmin();
 };
 
-window.deleteDistributor=async(id,name)=>{
+window.deleteDistributor=async(id)=>{
+  const name=(adminCache.distributors||[]).find(x=>Number(x.id)===Number(id))?.name||"esta distribuidora";
   const dist=(adminCache.distributors||[]).find(d=>Number(d.id)===Number(id));
   const canDelete=["admin","sub_admin"].includes(profile?.role)||(profile?.role==="regional_manager"&&dist?.created_by===user?.id);
   if(!canDelete) return;
@@ -2694,8 +2422,8 @@ function renderItemGoalsManager(){
     const answeredToday=relevant.some(r=>r.report_date===todayStr);
     const inPeriod=todayStr>=g.start_date&&todayStr<=g.end_date&&g.active;
     return `<tr>
-      <td><strong>${repNames[g.assigned_user_id]||"Representante"}</strong></td>
-      <td><strong>${g.item_name}</strong><br><span class="goal-status-pill ${inPeriod?"":"closed"}">${inPeriod?"Ativa":"Fora do período"}</span></td>
+      <td><strong>${escapeHtml(repNames[g.assigned_user_id]||"Representante")}</strong></td>
+      <td><strong>${escapeHtml(g.item_name)}</strong><br><span class="goal-status-pill ${inPeriod?"":"closed"}">${inPeriod?"Ativa":"Fora do período"}</span></td>
       <td>${g.start_date.split("-").reverse().join("/")}<br>${g.end_date.split("-").reverse().join("/")}</td>
       <td>${g.target_quantity}</td>
       <td>${soldQty}</td>
@@ -2805,145 +2533,65 @@ $("#exportBtn").addEventListener("click",()=>{
   a.href=url;a.download=`vendas-${adminCache.month}.csv`;a.click();URL.revokeObjectURL(url);
 });
 
+function updateManualUserRoleFields(){
+  const role=$("#manualRepRole")?.value||"rep";
+  const isRep=role==="rep";
+  const isRegional=role==="regional_manager";
+  $("#manualRepStateWrap")?.classList.toggle("hidden",!isRep);
+  $("#manualRepManagedStatesWrap")?.classList.toggle("hidden",!isRegional);
+  $("#manualRepTargetWrap")?.classList.toggle("hidden",!(isRep||isRegional));
+  if(!isRep && $("#manualRepState")) $("#manualRepState").value="";
+  if(!isRegional && $("#manualRepManagedStates")) $("#manualRepManagedStates").value="";
+  if(!(isRep||isRegional) && $("#manualRepTarget")) $("#manualRepTarget").value="R$ 0,00";
+}
+$("#manualRepRole")?.addEventListener("change",updateManualUserRoleFields);
+
 $("#manualRepForm")?.addEventListener("submit",async e=>{
   e.preventDefault();
   const msg=$("#manualRepMsg");
   setMsg(msg,"");
-  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)){
-    return setMsg(msg,"Você não possui permissão para cadastrar representantes.");
+  if(profile?.role!=="admin"){
+    return setMsg(msg,"Cadastro de usuários exclusivo do Administrador Geral.");
   }
+  const role=$("#manualRepRole")?.value||"rep";
   const name=$("#manualRepName").value.trim().toUpperCase();
   const email=$("#manualRepEmail").value.trim().toLowerCase();
   const password=$("#manualRepPassword").value;
-  const state_code=$("#manualRepState").value.trim().toUpperCase();
-  const monthly_target=parseCurrencyInput($("#manualRepTarget").value);
-  if(!name)return setMsg(msg,"Informe o nome do representante.");
+  const state_code=$("#manualRepState")?.value.trim().toUpperCase()||"";
+  const managed_states=[...new Set(String($("#manualRepManagedStates")?.value||"").split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))];
+  const monthly_target=parseCurrencyInput($("#manualRepTarget")?.value||"0");
+  if(!name)return setMsg(msg,"Informe o nome.");
   if(!email||!email.includes("@"))return setMsg(msg,"Informe um e-mail válido.");
-  if(password.length<6)return setMsg(msg,"A senha inicial deve ter pelo menos 6 caracteres.");
-  if(!/^[A-Z]{2}$/.test(state_code))return setMsg(msg,"Informe a UF com 2 letras, por exemplo PE.");
-  if(profile?.role==="regional_manager"){
-    const allowed=(profile.managed_states||[]).map(x=>String(x).toUpperCase());
-    if(!allowed.includes(state_code))return setMsg(msg,"Você só pode cadastrar representantes da sua região.");
-  }
+  if(password.length<8)return setMsg(msg,"A senha inicial deve ter pelo menos 8 caracteres.");
+  if(role==="rep" && !/^[A-Z]{2}$/.test(state_code))return setMsg(msg,"Informe a UF do representante com 2 letras, por exemplo PE.");
+  if(role==="regional_manager" && (!managed_states.length || managed_states.some(x=>!/^[A-Z]{2}$/.test(x))))return setMsg(msg,"Informe as UFs do Gerente Regional, por exemplo PE, PB, RN.");
   const btn=$("#manualRepSubmit");
   if(btn){btn.disabled=true;btn.textContent="CADASTRANDO...";}
   try{
-    const {data,error}=await sb.functions.invoke("admin-create-representative",{body:{name,email,password,state_code,monthly_target}});
+    const {data,error}=await sb.functions.invoke("admin-create-user",{body:{name,email,password,role,state_code,managed_states,monthly_target}});
     if(error){
       const details=error?.context?.json ? await error.context.json().catch(()=>null) : null;
-      throw new Error(details?.error||error.message||"Erro ao cadastrar representante.");
+      throw new Error(details?.error||error.message||"Erro ao cadastrar usuário.");
     }
     if(data?.error)throw new Error(data.error);
-    setMsg(msg,`Representante ${data?.name||name} cadastrado com sucesso em ${state_code}. No primeiro acesso deverá trocar a senha.`,"ok");
+    const roleName=role==="rep"?"Representante":role==="regional_manager"?"Gerente Regional":role==="sub_admin"?"Subadministrador":"Gerente Divisional";
+    setMsg(msg,`${roleName} ${data?.name||name} cadastrado com sucesso. No primeiro acesso deverá trocar a senha.`,"ok");
     $("#manualRepName").value="";
     $("#manualRepEmail").value="";
     $("#manualRepPassword").value="";
+    $("#manualRepState").value="";
+    $("#manualRepManagedStates").value="";
     $("#manualRepTarget").value="R$ 0,00";
-    if(profile?.role!=="regional_manager" || (profile.managed_states||[]).length!==1) $("#manualRepState").value="";
+    $("#manualRepRole").value="rep";
+    updateManualUserRoleFields();
     await loadAdmin();
   }catch(err){
-    setMsg(msg,err?.message||"Erro ao cadastrar representante.");
+    setMsg(msg,err?.message||"Erro ao cadastrar usuário.");
   }finally{
-    if(btn){btn.disabled=false;btn.textContent="CADASTRAR REPRESENTANTE";}
+    if(btn){btn.disabled=false;btn.textContent="CADASTRAR USUÁRIO";}
   }
 });
 
-function updateInviteRoleFields(){
-  const role=$("#inviteRole")?.value||"rep";
-  const isRep=role==="rep",isRegional=role==="regional_manager";
-  $("#inviteTargetWrap")?.classList.toggle("hidden",!isRep);
-  $("#inviteStateWrap")?.classList.toggle("hidden",!isRep);
-  $("#inviteManagedStatesWrap")?.classList.toggle("hidden",!isRegional);
-  if(!isRep) $("#inviteTarget").value="R$ 0,00";
-}
-$("#inviteRole")?.addEventListener("change",updateInviteRoleFields);
-
-$("#inviteForm").addEventListener("submit",async e=>{
-  e.preventDefault();setMsg($("#inviteMsg"),"");
-  if(!["admin","sub_admin","regional_manager"].includes(profile?.role)) return setMsg($("#inviteMsg"),"Você não possui permissão para gerar acessos.");
-  const role=["sub_admin","regional_manager"].includes(profile?.role)?"rep":($("#inviteRole")?.value||"rep");
-  const state_code=role==="rep"?($("#inviteState").value.trim().toUpperCase()||null):null;
-  const managed_states=role==="regional_manager"?[...new Set($("#inviteManagedStates").value.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))]:[];
-  if(role==="regional_manager"&&!managed_states.length)return setMsg($("#inviteMsg"),"Informe pelo menos um estado para o Gerente Regional.");
-  if(profile?.role==="regional_manager" && (!state_code || !(profile.managed_states||[]).map(x=>String(x).toUpperCase()).includes(state_code))){
-    return setMsg($("#inviteMsg"),"Escolha um estado que pertença à sua região.");
-  }
-  const row={
-    representative_name:$("#inviteName").value.trim(),
-    monthly_target:role==="rep"?parseCurrencyInput($("#inviteTarget").value):0,
-    invite_role:role,
-    state_code,
-    managed_states
-  };
-  const {data,error}=await sb.from("representative_invites").insert(row).select().single();
-  if(error)return setMsg($("#inviteMsg"),error.message);
-  $("#generatedCode").textContent=data.code;
-  $("#inviteResult").classList.remove("hidden");
-  setMsg($("#inviteMsg"),role==="sub_admin"
-    ?"Convite de subadministrador criado. Envie o código para o segundo gestor."
-    :role==="regional_manager"
-      ?"Convite de Gerente Regional criado. Envie o código ao gerente."
-      :role==="divisional_manager"
-        ?"Convite de Gerente Divisional criado. Envie o código ao gerente."
-        :"Convite de representante criado. Envie o código ao representante.","ok");
-  await loadAdmin();
-});
-$("#copyCodeBtn").addEventListener("click",async()=>{await navigator.clipboard.writeText($("#generatedCode").textContent);$("#copyCodeBtn").textContent="Copiado!";setTimeout(()=>$("#copyCodeBtn").textContent="Copiar código",1300);});
-
-$("#resetPasswordForm")?.addEventListener("submit",async e=>{e.preventDefault();const p1=$("#newPassword").value,p2=$("#confirmNewPassword").value;if(p1!==p2)return setMsg($("#resetPasswordMsg"),"As senhas não coincidem.");const {error}=await sb.auth.updateUser({password:p1});if(error)return setMsg($("#resetPasswordMsg"),error.message);try{await loadProfile();if(profile?.must_change_password)await sb.rpc("complete_password_change");}catch(_e){}setMsg($("#resetPasswordMsg"),"Senha atualizada com sucesso.","ok");setTimeout(()=>boot(),800);});
-
-sb.auth.onAuthStateChange(async(event,session)=>{if(event==="PASSWORD_RECOVERY"){user=session?.user||null;showOnly("#resetView");$("#logoutBtn").classList.remove("hidden");return;}if(session?.user){user=session.user;await loadProfile();await tryPendingInvite();}});
-boot();
-
-
-function renderAdminSalesHistory(){
-  if(!adminCache.sales)return;
-  const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
-  const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
-  const rows=[...(adminCache.sales||[])].filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end)).sort((a,b)=>b.sale_date.localeCompare(a.sale_date));
-  $("#adminSalesHistory").innerHTML=rows.map(s=>`<tr><td>${s.sale_date.split("-").reverse().join("/")}</td><td>${reps[s.user_id]||"Representante"}</td><td>${money(s.amount)}</td><td>${s.note||"—"}</td><td>${["admin","sub_admin","regional_manager"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="editSale(${s.id},${Number(s.amount||0)},'${String(s.note||"").replaceAll("'","&#39;")}')">Corrigir</button>`:'<span class="muted">Consulta</span>'}</td></tr>`).join("")||`<tr><td colspan="5">Nenhum lançamento encontrado.</td></tr>`;
-}
-["historyRep","historyStart","historyEnd"].forEach(id=>$("#"+id)?.addEventListener("change",renderAdminSalesHistory));
-$("#clearHistoryFilters")?.addEventListener("click",()=>{$("#historyRep").value="";$("#historyStart").value="";$("#historyEnd").value="";renderAdminSalesHistory();});
-
-window.editSale=async(id,amount,note)=>{
-  const value=prompt("Novo valor da venda:",formatBRLInput(amount));
-  if(value===null) return;
-  const newAmount=parseLooseBRL(value);
-  if(Number.isNaN(newAmount)||newAmount<0) return alert("Valor inválido.");
-  const newNote=prompt("Observação:",note) ?? note;
-  const {error}=await sb.from("daily_sales").update({amount:newAmount,note:newNote||null}).eq("id",id);
-  if(error) return alert(error.message);
-  await loadAdmin();
-};
-
-function filteredAdminRows(){
-  const repId=$("#historyRep")?.value||"",start=$("#historyStart")?.value||"",end=$("#historyEnd")?.value||"";
-  const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r.name]));
-  const distNames=Object.fromEntries((adminCache.distributors||[]).map(d=>[String(d.id),d.name]));
-  return [...(adminCache.sales||[])]
-    .filter(s=>(!repId||s.user_id===repId)&&(!start||s.sale_date>=start)&&(!end||s.sale_date<=end))
-    .sort((a,b)=>a.sale_date.localeCompare(b.sale_date))
-    .map(s=>{
-      const distText=(adminCache.salesDistributors||[])
-        .filter(x=>x.user_id===s.user_id&&x.sale_date===s.sale_date)
-        .map(x=>`${distNames[String(x.distributor_id)]||"Distribuidora"}: ${money(x.amount)}`)
-        .join(" | ");
-      return {
-        Data:s.sale_date.split("-").reverse().join("/"),
-        Representante:reps[s.user_id]||"",
-        Distribuidoras:distText||"—",
-        Valor:Number(s.amount||0),
-        Observacao:s.note||""
-      };
-    });
-}
-$("#exportXlsxBtn")?.addEventListener("click",()=>{const rows=filteredAdminRows(),ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:12},{wch:28},{wch:48},{wch:14},{wch:42}];XLSX.utils.book_append_sheet(wb,ws,"Vendas");XLSX.writeFile(wb,`acompanhamento-gerencial-${adminCache.month}.xlsx`);});
-$("#printReportBtn")?.addEventListener("click",()=>{
-  const rows=filteredAdminRows(),total=rows.reduce((s,r)=>s+Number(r.Valor||0),0),w=window.open("","_blank");
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório</title><style>body{font-family:Arial;padding:28px}h1{color:#0b6b3a}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#eef7f1}</style></head><body><h1>SAPECE — Sistema de Apuração de Pedidos e Campanhas</h1><p>Relatório ${adminCache.month}</p><table><thead><tr><th>Data</th><th>Representante</th><th>Distribuidoras</th><th>Valor</th><th>Observação</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.Data}</td><td>${r.Representante}</td><td>${r.Distribuidoras||"—"}</td><td>${money(r.Valor)}</td><td>${r.Observacao||"—"}</td></tr>`).join("")}</tbody></table><h3>Total: ${money(total)}</h3><p>Projeto pessoal — Especialista Escobar-PB</p><script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
-});
 
 
 
@@ -2965,6 +2613,7 @@ $("#resetPanelBtn")?.addEventListener("click",async()=>{
   const operations=[
     ()=>sb.from("item_goal_reports").delete().not("id","is",null),
     ()=>sb.from("sales_orders").delete().not("id","is",null),
+    ()=>sb.from("rep_day_closures").delete().not("id","is",null),
     ()=>sb.from("daily_sales_distributors").delete().not("id","is",null),
     ()=>sb.from("daily_sales").delete().not("id","is",null),
     ()=>sb.from("item_goals").delete().not("id","is",null),

@@ -28,12 +28,6 @@
   <main class="container">
     <section id="authView" class="auth-shell">
       <div class="card auth-card">
-        <div class="tabs">
-          <button class="tab active" data-tab="login">Entrar</button>
-          <button class="tab" data-tab="setup">Primeiro acesso</button>
-          <button class="tab" data-tab="repSignup">Representante</button>
-        </div>
-
         <div id="loginPane" class="pane">
           <h1>Entrar</h1>
           <p class="muted">Use seu e-mail e senha.</p>
@@ -50,36 +44,6 @@
             <span>Projeto pessoal</span>
             <strong>Especialista Escobar-PB</strong>
           </div>
-        </div>
-
-        <div id="setupPane" class="pane hidden">
-          <h1>Primeiro administrador</h1>
-          <p class="muted">Use esta opção apenas na primeira configuração do sistema.</p>
-          <form id="setupForm">
-            <label>Seu nome</label>
-            <input id="setupName" required>
-            <label>E-mail</label>
-            <input id="setupEmail" type="email" required>
-            <label>Senha</label>
-            <input id="setupPassword" type="password" minlength="6" required>
-            <button class="btn btn-primary" type="submit">Criar administrador</button>
-          </form>
-          <p id="setupMsg" class="msg"></p>
-        </div>
-
-        <div id="repSignupPane" class="pane hidden">
-          <h1>Cadastro de representante</h1>
-          <p class="muted">Você precisa do código de convite fornecido pelo gestor.</p>
-          <form id="repSignupForm">
-            <label>Código de convite</label>
-            <input id="inviteCode" required>
-            <label>E-mail</label>
-            <input id="repEmail" type="email" required>
-            <label>Senha</label>
-            <input id="repPassword" type="password" minlength="6" required>
-            <button class="btn btn-primary" type="submit">Criar acesso</button>
-          </form>
-          <p id="repSignupMsg" class="msg"></p>
         </div>
       </div>
     </section>
@@ -872,16 +836,25 @@
         </div>
       </div>
 
-      <div id="manualRepCard" class="card">
+      <div id="manualRepCard" class="card hidden">
         <div class="section-head">
           <div>
-            <h2>Cadastro manual de representante</h2>
-            <p class="muted">Crie o acesso completo sem código de convite. O representante entra com a senha inicial e será obrigado a trocar a senha no primeiro acesso.</p>
+            <h2>Cadastro de usuários</h2>
+            <p class="muted">Exclusivo do Administrador Geral. Crie representantes e perfis gerenciais diretamente, sem convite e sem cadastro pela tela de login.</p>
           </div>
         </div>
         <form id="manualRepForm" class="grid grid-2">
           <div>
-            <label>Nome do representante</label>
+            <label>Tipo de acesso</label>
+            <select id="manualRepRole" required>
+              <option value="rep">Representante</option>
+              <option value="regional_manager">Gerente Regional</option>
+              <option value="sub_admin">Subadministrador</option>
+              <option value="divisional_manager">Gerente Divisional</option>
+            </select>
+          </div>
+          <div>
+            <label>Nome</label>
             <input id="manualRepName" required placeholder="EX.: JOÃO SILVA">
           </div>
           <div>
@@ -890,70 +863,27 @@
           </div>
           <div>
             <label>Senha inicial</label>
-            <input id="manualRepPassword" type="password" required minlength="6" placeholder="Mínimo 6 caracteres">
+            <input id="manualRepPassword" type="password" required minlength="8" placeholder="Mínimo 8 caracteres">
           </div>
-          <div>
-            <label>Estado / UF</label>
-            <input id="manualRepState" maxlength="2" required placeholder="EX.: PE">
+          <div id="manualRepStateWrap">
+            <label>Estado / UF do representante</label>
+            <input id="manualRepState" maxlength="2" placeholder="EX.: PE">
           </div>
-          <div>
+          <div id="manualRepManagedStatesWrap" class="hidden">
+            <label>UFs administradas pelo Gerente Regional</label>
+            <input id="manualRepManagedStates" placeholder="EX.: PE, PB, RN">
+            <small class="muted">Separe as UFs por vírgula.</small>
+          </div>
+          <div id="manualRepTargetWrap">
             <label>Meta mensal (R$)</label>
             <input id="manualRepTarget" class="money-input" type="text" inputmode="numeric" value="R$ 0,00" placeholder="R$ 0,00" autocomplete="off">
           </div>
           <div style="display:flex;align-items:end">
-            <button id="manualRepSubmit" class="btn btn-primary" type="submit" style="width:100%">CADASTRAR REPRESENTANTE</button>
+            <button id="manualRepSubmit" class="btn btn-primary" type="submit" style="width:100%">CADASTRAR USUÁRIO</button>
           </div>
         </form>
         <p id="manualRepMsg" class="msg"></p>
       </div>
-
-      <div id="inviteSectionGrid" class="grid grid-2">
-        <div id="adminInviteCard" class="card">
-          <h2>Gerar convite de acesso</h2>
-          <form id="inviteForm">
-            <label>Tipo de acesso</label>
-            <select id="inviteRole">
-              <option value="rep">Representante</option>
-              <option value="sub_admin">Subadministrador</option>
-              <option value="regional_manager">Gerente Regional</option>
-              <option value="divisional_manager">Gerente Divisional</option>
-            </select>
-            <label>Nome</label>
-            <input id="inviteName" required>
-            <div id="inviteTargetWrap">
-              <label>Meta mensal (R$)</label>
-              <input id="inviteTarget" class="money-input" type="text" inputmode="numeric" value="R$ 0,00" placeholder="R$ 0,00" autocomplete="off">
-            </div>
-            <div id="inviteStateWrap">
-              <label>Estado do representante</label>
-              <input id="inviteState" maxlength="2" placeholder="Ex.: PB">
-            </div>
-            <div id="inviteManagedStatesWrap" class="hidden">
-              <label>Estados gerenciados</label>
-              <input id="inviteManagedStates" placeholder="Ex.: PB, PE, RN">
-              <small class="muted">Separe os estados por vírgula.</small>
-            </div>
-            <button class="btn btn-primary" type="submit">Gerar código</button>
-          </form>
-          <div id="inviteResult" class="invite-box hidden">
-            <span>Código de convite</span>
-            <strong id="generatedCode"></strong>
-            <button id="copyCodeBtn" class="btn btn-secondary" type="button">Copiar código</button>
-          </div>
-          <p id="inviteMsg" class="msg"></p>
-        </div>
-
-        <div class="card">
-          <h2>Convites recentes</h2>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Nome</th><th>Acesso</th><th>Código</th><th>Status</th></tr></thead>
-              <tbody id="inviteList"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
 
       <div id="positiveCnpjCard" class="card">
         <div class="section-head">
