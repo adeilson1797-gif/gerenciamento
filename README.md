@@ -1,3 +1,12 @@
+## SAPECE v6.3.5.2 — revisão geral do projeto
+
+- Corrigida a mensagem de fechamento para regiões sem alerta por e-mail (fora de PB/RN).
+- Novos pedidos passam a exigir SKU > 0 também no banco; histórico antigo com SKU 0 foi preservado.
+- Funções críticas do Supabase foram restringidas a usuários autenticados.
+- Conferência de integridade entre pedidos finalizados e totais diários concluída com 0 divergências após recálculo do único consolidado divergente.
+- Validação estática: JavaScript sem erro de sintaxe, sem IDs HTML ausentes ou duplicados e sem referência à função antiga de cadastro.
+- Um usuário legado permanece no Auth sem perfil; foi mantido para não excluir acesso sem autorização explícita.
+
 ## SAPECE v6.3.4.1 — revisão de integridade
 
 - Corrige inicialização do painel do representante (`orderDate`).
@@ -720,3 +729,12 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Tela de login sem `Primeiro acesso`, sem cadastro de representante e sem painel de convite: aprovado.
 - Políticas de `representative_invites`: somente políticas `invites_admin_*` permanecem.
 - Totais de vendas e campanhas continuam derivados dos pedidos finalizados; nenhuma alteração de dados históricos foi feita nesta versão.
+
+
+## v6.3.6 — senha administrada pelo ADM + fechamento sem venda
+- Removido o botão "Esqueci minha senha" e o fluxo público de recuperação.
+- Reset de senha permanece exclusivo do Administrador Geral.
+- Representante pode marcar "NÃO HOUVE VENDA HOJE" somente no dia atual e quando não houver pedidos cadastrados.
+- Motivo é obrigatório e armazenado em CAIXA ALTA.
+- O dia passa a constar como finalizado na gerência, com status "Sem venda" e motivo visível.
+- Nenhuma venda de R$ 0,00 é criada; o fechamento sem venda é registrado separadamente em rep_day_closures.

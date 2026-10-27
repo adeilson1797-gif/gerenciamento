@@ -1,4 +1,4 @@
-// SAPECE v6.3.5 — segurança da interface + cadastros exclusivos do Administrador Geral
+// SAPECE v6.3.6 — senha somente pelo ADM + fechamento sem venda
 
 const cfg = window.APP_CONFIG;
 const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY);
@@ -22,10 +22,10 @@ function normalizeLegalName(value){
 }
 
 
-let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[],orders:[],orderCampaignItems:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repDayClosuresCache=[], repOrderDistributorMap={}, repOrderCampaignMap={}, clientBaseCache=[], orderCampaignGoalCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
+let user=null, profile=null, adminCache={reps:[],allProfiles:[],sales:[],month:"",itemGoals:[],itemReports:[],distributors:[],salesDistributors:[],orders:[],orderCampaignItems:[],closures:[]}, repGoalCache=[], repDistributorCache=[], repCustomersCache=[], repOrdersCache=[], repDayClosuresCache=[], repOrderDistributorMap={}, repOrderCampaignMap={}, clientBaseCache=[], orderCampaignGoalCache=[], dailyChart=null, divisionalStateChart=null, divisionalManagerChart=null, divisionalItemGoalChart=null;
 
 function showOnly(id){
-  ["#authView","#resetView","#forcePasswordView","#repView","#adminView"].forEach(x=>{
+  ["#authView","#forcePasswordView","#repView","#adminView"].forEach(x=>{
     const el=$(x);
     if(el) el.classList.add("hidden");
   });
@@ -156,7 +156,7 @@ async function notifyDayFinalizedByEmail(saleDate){
       console.error("Alerta de fechamento por e-mail:",error);
       return {ok:false,error};
     }
-    return {ok:true,data};
+    return {ok:true,skipped:Boolean(data?.skipped),data};
   }catch(err){
     console.error("Alerta de fechamento por e-mail:",err);
     return {ok:false,error:err};
@@ -481,11 +481,6 @@ $("#forcePasswordForm")?.addEventListener("submit",async e=>{
   await loadProfile();setTimeout(()=>boot(),600);
 });
 
-$("#forgotBtn").addEventListener("click",async()=>{
-  const email=$("#loginEmail").value.trim(); if(!email)return setMsg($("#loginMsg"),"Digite seu e-mail primeiro.");
-  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
-  setMsg($("#loginMsg"),error?error.message:"Link de recuperação enviado.","ok");
-});
 $("#logoutBtn").addEventListener("click",async()=>{await sb.auth.signOut();await boot();});
 
 
@@ -964,7 +959,7 @@ async function loadRepOrders(){
     sb.from("sales_orders").select("*").eq("user_id",user.id).gte("order_date",start).lte("order_date",end).order("order_date",{ascending:false}),
     sb.from("distributors").select("id,name,active").eq("active",true).order("name"),
     sb.from("client_base").select("*").eq("user_id",user.id).eq("active",true).order("legal_name"),
-    sb.from("rep_day_closures").select("sale_date,finalized_at").eq("user_id",user.id).gte("sale_date",start).lte("sale_date",end)
+    sb.from("rep_day_closures").select("sale_date,finalized_at,closure_type,no_sale_reason").eq("user_id",user.id).gte("sale_date",start).lte("sale_date",end)
   ]);
 
   if(cErr||oErr||dErr||bErr||clErr){
@@ -1063,7 +1058,7 @@ function selectedDaySummary(){
 }
 
 function renderDayFinalizationState(){
-  const card=$("#dayFinalizeCard"),btn=$("#finalizeDayBtn");
+  const card=$("#dayFinalizeCard"),btn=$("#finalizeDayBtn"),noSaleBtn=$("#noSaleTodayBtn");
   if(!card||!btn)return;
   const s=selectedDaySummary();
   const formatted=s.dateStr.split("-").reverse().join("/");
@@ -1077,10 +1072,14 @@ function renderDayFinalizationState(){
   card.classList.toggle("is-finalized",Boolean(s.closure));
   card.classList.toggle("is-ready",!s.closure&&s.pending.length>0);
   if(s.closure){
-    $("#dayFinalizeTitle").textContent="Dia finalizado e enviado para a gerência";
-    $("#dayFinalizeHint").textContent="Os pedidos deste dia estão confirmados e não podem mais ser alterados pelo representante.";
+    const isNoSale=s.closure.closure_type==="no_sale";
+    $("#dayFinalizeTitle").textContent=isNoSale?"Dia finalizado sem venda":"Dia finalizado e enviado para a gerência";
+    $("#dayFinalizeHint").textContent=isNoSale
+      ? `Motivo informado: ${String(s.closure.no_sale_reason||"—")}`
+      : "Os pedidos deste dia estão confirmados e não podem mais ser alterados pelo representante.";
     btn.disabled=true;
     btn.textContent="✅ DIA FINALIZADO";
+    noSaleBtn?.classList.add("hidden");
     return;
   }
 
@@ -1090,6 +1089,8 @@ function renderDayFinalizationState(){
     : "Cadastre todos os pedidos. Eles ficarão em standby até você confirmar o fechamento do dia.";
   btn.disabled=s.pending.length===0;
   btn.textContent=s.pending.length?`✅ FINALIZAR O DIA — CONFIRMAR ${s.pending.length} PEDIDO${s.pending.length===1?"":"S"}`:"AGUARDANDO PEDIDOS DO DIA";
+  const canDeclareNoSale=s.dateStr===today() && s.orders.length===0;
+  noSaleBtn?.classList.toggle("hidden",!canDeclareNoSale);
 }
 
 async function refreshSelectedDayState(){
@@ -1097,7 +1098,7 @@ async function refreshSelectedDayState(){
   const dateStr=$("#orderDate")?.value||today();
   const [{data:orders,error:oErr},{data:closures,error:cErr}]=await Promise.all([
     sb.from("sales_orders").select("*").eq("user_id",user.id).eq("order_date",dateStr).order("created_at"),
-    sb.from("rep_day_closures").select("sale_date,finalized_at").eq("user_id",user.id).eq("sale_date",dateStr)
+    sb.from("rep_day_closures").select("sale_date,finalized_at,closure_type,no_sale_reason").eq("user_id",user.id).eq("sale_date",dateStr)
   ]);
   if(oErr||cErr){console.error(oErr||cErr);return;}
   const otherOrders=(repOrdersCache||[]).filter(o=>o.order_date!==dateStr);
@@ -1437,6 +1438,44 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   await loadRep();
 });
 
+function closeNoSaleDialog(){
+  const dialog=$("#noSaleDialog");
+  if(dialog?.open)dialog.close();
+  setMsg($("#noSaleMsg"),"");
+}
+
+$("#noSaleTodayBtn")?.addEventListener("click",()=>{
+  if(profile?.role!=="rep")return;
+  const s=selectedDaySummary();
+  if(s.dateStr!==today())return setMsg($("#finalizeDayMsg"),"A opção sem venda é exclusiva para o dia de hoje.");
+  if(s.closure)return;
+  if(s.orders.length)return setMsg($("#finalizeDayMsg"),"Já existem pedidos cadastrados hoje. Finalize os pedidos normalmente.");
+  $("#noSaleReason").value="";
+  setMsg($("#noSaleMsg"),"");
+  $("#noSaleDialog")?.showModal();
+});
+
+$("#cancelNoSaleBtn")?.addEventListener("click",closeNoSaleDialog);
+$("#cancelNoSaleBtnBottom")?.addEventListener("click",closeNoSaleDialog);
+
+$("#noSaleForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(profile?.role!=="rep")return;
+  const reason=String($("#noSaleReason")?.value||"").trim().toUpperCase();
+  if(reason.length<5)return setMsg($("#noSaleMsg"),"Informe um motivo com pelo menos 5 caracteres.");
+  const btn=$("#confirmNoSaleBtn");
+  btn.disabled=true;
+  btn.textContent="FINALIZANDO...";
+  setMsg($("#noSaleMsg"),"");
+  const {data,error}=await sb.rpc("finalize_no_sale_day",{p_reason:reason});
+  btn.disabled=false;
+  btn.textContent="FINALIZAR DIA SEM VENDA";
+  if(error)return setMsg($("#noSaleMsg"),error.message);
+  closeNoSaleDialog();
+  setMsg($("#finalizeDayMsg"),"Dia finalizado sem venda. A gerência já visualizará o fechamento e o motivo informado.","ok");
+  await loadRep();
+});
+
 $("#finalizeDayBtn")?.addEventListener("click",async()=>{
   if(profile?.role!=="rep")return;
   const s=selectedDaySummary();
@@ -1458,7 +1497,9 @@ $("#finalizeDayBtn")?.addEventListener("click",async()=>{
   }
 
   const mail=await notifyDayFinalizedByEmail(s.dateStr);
-  if(mail.ok){
+  if(mail.ok && mail.skipped){
+    setMsg($("#finalizeDayMsg"),`Dia finalizado com sucesso. ${Number(data?.orders||s.pending.length)} pedido(s) confirmados. Para esta região não há envio de alerta por e-mail.`,"ok");
+  }else if(mail.ok){
     setMsg($("#finalizeDayMsg"),`Dia finalizado com sucesso. ${Number(data?.orders||s.pending.length)} pedido(s) confirmados e alerta enviado para a gerência.`,"ok");
   }else{
     setMsg($("#finalizeDayMsg"),"Dia finalizado com sucesso. O fechamento foi confirmado, mas o alerta por e-mail não pôde ser enviado agora.","ok");
@@ -1574,7 +1615,8 @@ async function loadAdmin(){
     {data:orders,error:oErr},
     {data:allOrders,error:aoErr},
     {data:customers,error:cErr},
-    {data:orderCampaignItems,error:ociErr}
+    {data:orderCampaignItems,error:ociErr},
+    {data:closures,error:clErr}
   ]=await Promise.all([
     sb.from("profiles").select("*").order("name"),
     sb.from("daily_sales").select("*").gte("sale_date",start).lte("sale_date",end),
@@ -1585,9 +1627,10 @@ async function loadAdmin(){
     sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end).not("finalized_at","is",null),
     sb.from("sales_orders").select("*").gte("order_date",start).lte("order_date",end),
     sb.from("customers").select("*"),
-    sb.from("order_campaign_items").select("*").gte("report_date",start).lte("report_date",end)
+    sb.from("order_campaign_items").select("*").gte("report_date",start).lte("report_date",end),
+    sb.from("rep_day_closures").select("user_id,sale_date,finalized_at,closure_type,no_sale_reason").gte("sale_date",start).lte("sale_date",end)
   ]);
-  if(pErr||sErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr){console.error(pErr||sErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr);return;}
+  if(pErr||sErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr||clErr){console.error(pErr||sErr||gErr||grErr||dErr||sdErr||oErr||aoErr||cErr||ociErr||clErr);return;}
   const allProfiles=profiles||[];
   const reps=allProfiles.filter(r=>r.role==="rep"&&r.active), map={};
   const goalRep=$("#goalRep");
@@ -1596,7 +1639,16 @@ async function loadAdmin(){
     goalRep.innerHTML='<option value="">Selecione...</option>'+reps.map(r=>`<option value="${r.user_id}">${escapeHtml(r.name)}</option>`).join("");
     if(reps.some(r=>r.user_id===keep)) goalRep.value=keep;
   }
-  (sales||[]).forEach(s=>{map[s.user_id]||={month:0,today:0,last:null,hasToday:false};map[s.user_id].month+=Number(s.amount||0);if(s.sale_date===today()){map[s.user_id].today+=Number(s.amount||0);map[s.user_id].hasToday=true;}if(!map[s.user_id].last||s.sale_date>map[s.user_id].last)map[s.user_id].last=s.sale_date;});
+  (sales||[]).forEach(s=>{map[s.user_id]||={month:0,today:0,last:null,hasToday:false,noSaleReason:null,closureType:null};map[s.user_id].month+=Number(s.amount||0);if(s.sale_date===today()){map[s.user_id].today+=Number(s.amount||0);map[s.user_id].hasToday=true;}if(!map[s.user_id].last||s.sale_date>map[s.user_id].last)map[s.user_id].last=s.sale_date;});
+  (closures||[]).forEach(c=>{
+    map[c.user_id]||={month:0,today:0,last:null,hasToday:false,noSaleReason:null,closureType:null};
+    if(c.sale_date===today()){
+      map[c.user_id].hasToday=true;
+      map[c.user_id].closureType=c.closure_type||"sale";
+      map[c.user_id].noSaleReason=c.closure_type==="no_sale"?String(c.no_sale_reason||""):null;
+    }
+    if(!map[c.user_id].last||c.sale_date>map[c.user_id].last)map[c.user_id].last=c.sale_date;
+  });
   const totalMonth=Object.values(map).reduce((a,b)=>a+b.month,0),totalToday=Object.values(map).reduce((a,b)=>a+b.today,0),target=reps.reduce((a,b)=>a+Number(b.monthly_target||0),0);
   const yesterday=previousDateISO();
   const totalYesterday=(sales||[]).filter(s=>s.sale_date===yesterday).reduce((a,b)=>a+Number(b.amount||0),0);
@@ -1666,12 +1718,13 @@ async function loadAdmin(){
 
   const ranked=[...reps].sort((a,b)=>(map[b.user_id]?.month||0)-(map[a.user_id]?.month||0));
   $("#adminTeam").innerHTML=ranked.map((r,idx)=>{
-    const s=map[r.user_id]||{month:0,today:0,last:null,hasToday:false}, need=businessDayNeed(r.monthly_target,s.month,mk);
+    const s=map[r.user_id]||{month:0,today:0,last:null,hasToday:false,noSaleReason:null,closureType:null}, need=businessDayNeed(r.monthly_target,s.month,mk);
     const statusClass=!s.hasToday?"pending":(s.today>0?"sale":"zero");
     const statusText=!s.hasToday?"Pendente":(s.today>0?"Com venda":"Sem venda");
+    const statusDetail=s.closureType==="no_sale"&&s.noSaleReason?`<small class="status-reason">${escapeHtml(s.noSaleReason)}</small>`:"";
     return `<tr>
       <td><span class="rank-badge">${idx+1}</span></td><td>${escapeHtml(r.name)}</td>
-      <td><span class="status ${statusClass}">${statusText}</span></td>
+      <td><span class="status ${statusClass}">${statusText}</span>${statusDetail}</td>
       <td>${money(s.today)}</td>
       <td>${money(s.month)}</td>
       <td>${profile.role==="divisional_manager"
@@ -1697,7 +1750,8 @@ async function loadAdmin(){
   const finalizedCampaignItems=(orderCampaignItems||[]).filter(i=>finalizedOrderIds.has(String(i.order_id)));
   // Vendas gerenciais continuam considerando apenas pedidos finalizados.
   // A guia Comissão preserva todo o histórico já informado, inclusive pedidos do dia ainda em standby.
-  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[],orders:orders||[],allOrders:allOrders||[],customers:customers||[],orderCampaignItems:finalizedCampaignItems,allOrderCampaignItems:orderCampaignItems||[]};
+  adminCache={reps,allProfiles,sales:sales||[],month:mk,itemGoals:itemGoals||[],itemReports:itemReports||[],distributors:distributors||[],salesDistributors:salesDistributors||[],orders:orders||[],allOrders:allOrders||[],customers:customers||[],orderCampaignItems:finalizedCampaignItems,allOrderCampaignItems:orderCampaignItems||[],closures:closures||[]};
+  renderNoSaleClosures();
   renderAdminSalesHistory();
   renderUserManagement();
   renderItemGoalsManager();
@@ -1717,6 +1771,25 @@ async function loadAdmin(){
 }
 
 
+
+function renderNoSaleClosures(){
+  const table=$("#noSaleClosuresTable");
+  if(!table)return;
+  const reps=Object.fromEntries((adminCache.reps||[]).map(r=>[r.user_id,r]));
+  const rows=(adminCache.closures||[])
+    .filter(c=>c.closure_type==="no_sale")
+    .sort((a,b)=>b.sale_date.localeCompare(a.sale_date));
+  table.innerHTML=rows.map(c=>{
+    const rep=reps[c.user_id]||{};
+    return `<tr>
+      <td>${c.sale_date.split("-").reverse().join("/")}</td>
+      <td><strong>${escapeHtml(rep.name||"REPRESENTANTE")}</strong></td>
+      <td>${escapeHtml(rep.state_code||"—")}</td>
+      <td><span class="status zero">✅ Finalizado sem venda</span></td>
+      <td>${escapeHtml(c.no_sale_reason||"—")}</td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="5">Nenhum fechamento sem venda no período.</td></tr>`;
+}
 
 function renderDivisionalSummary(){
   const table=$("#divisionalRegionSummaryTable");
@@ -2635,25 +2708,13 @@ $("#resetPanelBtn")?.addEventListener("click",async()=>{
 
 // v6.3.5.1 — restaura rotinas do painel gerencial removidas acidentalmente na v6.3.5
 
-$("#resetPasswordForm")?.addEventListener("submit",async e=>{
-  e.preventDefault();
-  const p1=$("#newPassword").value,p2=$("#confirmNewPassword").value;
-  if(p1!==p2)return setMsg($("#resetPasswordMsg"),"As senhas não coincidem.");
-  const {error}=await sb.auth.updateUser({password:p1});
-  if(error)return setMsg($("#resetPasswordMsg"),error.message);
-  try{
-    await loadProfile();
-    if(profile?.must_change_password)await sb.rpc("complete_password_change");
-  }catch(_e){}
-  setMsg($("#resetPasswordMsg"),"Senha atualizada com sucesso.","ok");
-  setTimeout(()=>boot(),800);
-});
 
 sb.auth.onAuthStateChange(async(event,session)=>{
   if(event==="PASSWORD_RECOVERY"){
-    user=session?.user||null;
-    showOnly("#resetView");
-    $("#logoutBtn").classList.remove("hidden");
+    user=null; profile=null;
+    showOnly("#authView");
+    setMsg($("#loginMsg"),"Recuperação de senha por e-mail desativada. Solicite o reset ao Administrador Geral.");
+    setTimeout(()=>sb.auth.signOut(),0);
     return;
   }
   if(session?.user){

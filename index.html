@@ -38,7 +38,6 @@
             <input id="loginPassword" type="password" required autocomplete="current-password">
             <button class="btn btn-primary" type="submit">Entrar</button>
           </form>
-          <button id="forgotBtn" class="link-btn">Esqueci minha senha</button>
           <p id="loginMsg" class="msg"></p>
           <div class="project-credit">
             <span>Projeto pessoal</span>
@@ -48,21 +47,6 @@
       </div>
     </section>
 
-
-    <section id="resetView" class="auth-shell hidden">
-      <div class="card auth-card">
-        <h1>Definir nova senha</h1>
-        <p class="muted">Digite sua nova senha para concluir a recuperação de acesso.</p>
-        <form id="resetPasswordForm">
-          <label>Nova senha</label>
-          <input id="newPassword" type="password" minlength="6" required autocomplete="new-password">
-          <label>Confirmar nova senha</label>
-          <input id="confirmNewPassword" type="password" minlength="6" required autocomplete="new-password">
-          <button class="btn btn-primary" type="submit">Atualizar senha</button>
-        </form>
-        <p id="resetPasswordMsg" class="msg"></p>
-      </div>
-    </section>
 
     <section id="forcePasswordView" class="auth-shell hidden">
       <div class="card auth-card">
@@ -209,6 +193,7 @@
             <div><span>Itens campanha</span><strong id="dayFinalizeCampaign">0 un.</strong></div>
           </div>
           <button id="finalizeDayBtn" class="finalize-day-btn" type="button" disabled>AGUARDANDO PEDIDOS DO DIA</button>
+          <button id="noSaleTodayBtn" class="btn btn-outline no-sale-day-btn hidden" type="button">🚫 NÃO HOUVE VENDA HOJE</button>
           <p id="finalizeDayMsg" class="msg"></p>
         </div>
 
@@ -449,6 +434,26 @@
         </div>
       </div>
 </section>
+
+    <dialog id="noSaleDialog" class="sapece-dialog">
+      <form id="noSaleForm" method="dialog" class="dialog-card">
+        <div class="dialog-head">
+          <div>
+            <span class="eyebrow">FECHAMENTO SEM VENDA</span>
+            <h2>Não houve venda hoje</h2>
+          </div>
+          <button id="cancelNoSaleBtn" class="dialog-close" type="button" aria-label="Fechar">×</button>
+        </div>
+        <p class="muted">Informe o motivo. O dia será marcado como finalizado para a gerência, com valor de vendas R$ 0,00.</p>
+        <label for="noSaleReason">Motivo obrigatório</label>
+        <textarea id="noSaleReason" rows="5" minlength="5" maxlength="500" required placeholder="EX.: VISITAS REALIZADAS, MAS NÃO HOUVE FECHAMENTO DE PEDIDOS."></textarea>
+        <div class="dialog-actions">
+          <button id="cancelNoSaleBtnBottom" class="btn btn-light" type="button">Cancelar</button>
+          <button id="confirmNoSaleBtn" class="btn btn-primary" type="submit">FINALIZAR DIA SEM VENDA</button>
+        </div>
+        <p id="noSaleMsg" class="msg"></p>
+      </form>
+    </dialog>
 
     <section id="adminView" class="hidden">
       <div class="manager-access-line"><span id="managerRoleBadge" class="role-badge">Gestor</span></div>
@@ -703,6 +708,21 @@
           <table>
             <thead><tr><th>#</th><th>Representante</th><th>Status hoje</th><th>Hoje</th><th>Mês</th><th>Por distribuidora</th><th>Meta</th><th>% Meta</th><th>Necessário/dia útil</th><th>Último lançamento</th><th>Ações</th></tr></thead>
             <tbody id="adminTeam"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="noSaleClosuresCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Fechamentos sem venda</h2>
+            <p class="muted">Dias finalizados pelos representantes com R$ 0,00 em vendas e motivo informado.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Data</th><th>Representante</th><th>UF</th><th>Status</th><th>Motivo</th></tr></thead>
+            <tbody id="noSaleClosuresTable"></tbody>
           </table>
         </div>
       </div>
