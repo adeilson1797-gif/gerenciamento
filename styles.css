@@ -552,3 +552,38 @@ textarea { text-transform: uppercase; }
 .dialog-card textarea{width:100%;resize:vertical;text-transform:uppercase}
 .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;flex-wrap:wrap}
 .status-reason{display:block;margin-top:5px;max-width:280px;line-height:1.25;color:#64748b}
+
+/* v6.3.6.1 — correção de contraste do fechamento sem venda */
+.no-sale-day-btn{
+  background:#fff7ed;
+  color:#9a4f00;
+  border:2px solid #f59e0b;
+  box-shadow:0 4px 12px rgba(245,158,11,.12);
+}
+.no-sale-day-btn:hover,
+.no-sale-day-btn:focus{
+  background:#ffedd5;
+  color:#7c3f00;
+  border-color:#d97706;
+}
+.dialog-card{
+  background:#ffffff;
+  color:#1E2D24;
+}
+.dialog-card h2,
+.dialog-card label{
+  color:#1E2D24;
+}
+.dialog-card .muted{
+  color:#6B776F;
+}
+.dialog-card textarea{
+  background:#ffffff;
+  color:#1E2D24;
+  border-color:#cbd8cf;
+  caret-color:#0B6B3A;
+}
+.dialog-card textarea::placeholder{
+  color:#7b887f;
+  opacity:1;
+}
