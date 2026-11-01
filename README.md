@@ -748,3 +748,10 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Cadastro de usuários virou guia exclusiva do Administrador Geral.
 - Administrador Geral pode remover acesso de funcionário sem apagar histórico.
 - Metas ativas simplificadas; desempenho detalhado continua em Desempenho das metas por item.
+
+
+## v6.3.8
+- Alerta por e-mail ao finalizar o dia sem vendas (mantendo envio somente PB/RN).
+- Comissão total calculada como quantidade x valor unitário da comissão.
+- Alerta no login para comissões com pagamento previsto para o dia seguinte.
+- Após finalizar o dia, popup para conferir a agenda do dia seguinte.

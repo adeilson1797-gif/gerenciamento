@@ -163,6 +163,56 @@ async function notifyDayFinalizedByEmail(saleDate){
   }
 }
 
+function commissionLineTotal(item){
+  return Number(item?.quantity||0)*Number(item?.commission_value||0);
+}
+
+function tomorrowISODate(){
+  const d=new Date();
+  d.setDate(d.getDate()+1);
+  return localISODate(d);
+}
+
+async function showTomorrowAgendaPopup(){
+  if(profile?.role!=="rep"||!user)return;
+  const tomorrow=tomorrowISODate();
+  const {data,error}=await sb.from("rep_agenda")
+    .select("id,legal_name,cnpj,visit_date,notes,status")
+    .eq("user_id",user.id)
+    .eq("visit_date",tomorrow)
+    .eq("status","pending")
+    .order("legal_name");
+  if(error){console.error("Agenda de amanhã:",error);return;}
+  const rows=data||[];
+  const dialog=$("#tomorrowAgendaDialog");
+  if(!dialog)return;
+  $("#tomorrowAgendaDate").textContent=tomorrow.split("-").reverse().join("/");
+  $("#tomorrowAgendaSummary").textContent=rows.length
+    ? `${rows.length} visita(s) programada(s) para amanhã.`
+    : "Nenhuma visita programada para amanhã.";
+  $("#tomorrowAgendaList").innerHTML=rows.length
+    ? rows.map(r=>`<div class="agenda-pop-item"><strong>${escapeHtml(r.legal_name||"CLIENTE")}</strong><span>${r.cnpj?formatCNPJ(r.cnpj):"CNPJ NÃO INFORMADO"}${r.notes?` • ${escapeHtml(r.notes)}`:""}</span></div>`).join("")
+    : '<div class="agenda-pop-empty">Sua agenda de amanhã está livre.</div>';
+  dialog.showModal();
+}
+
+async function maybeShowTomorrowCommissionAlert(){
+  if(profile?.role!=="rep"||!user)return;
+  const key=`sapece_commission_alert_${user.id}_${today()}`;
+  if(sessionStorage.getItem(key)==="1")return;
+  sessionStorage.setItem(key,"1");
+  try{
+    await loadRepCommissionTracking();
+    const tomorrow=tomorrowISODate();
+    const due=(repCommissionTrackingCache||[]).filter(r=>r.due_date===tomorrow&&r.payment_status!=="paid");
+    if(!due.length)return;
+    const total=due.reduce((s,r)=>s+commissionLineTotal(r.item),0);
+    alert(`⚠️ COMISSÕES PARA PAGAR AMANHÃ\n\n${due.length} item(ns) com pagamento previsto para ${tomorrow.split("-").reverse().join("/")}.\nTotal previsto: ${money(total)}\n\nAcesse a guia Comissões para conferir.`);
+  }catch(err){
+    console.error("Alerta de comissão:",err);
+  }
+}
+
 function bindMoneyInputs(root=document){
   root.querySelectorAll(".money-input").forEach(bindMoneyInput);
 }
@@ -468,6 +518,7 @@ async function boot(){
     initSalesDateFilters();
     await loadRep();
     enableAutomaticTablePagination();
+    await maybeShowTomorrowCommissionAlert();
   }
 }
 
@@ -1014,7 +1065,7 @@ async function loadRepOrders(){
   $("#repOrdersTable").innerHTML=repOrdersCache.map(o=>{
     const campaign=repOrderCampaignMap[String(o.id)]||[];
     const campaignQty=campaign.reduce((s,r)=>s+Number(r.quantity||0),0);
-    const commission=campaign.reduce((s,r)=>s+Number(r.commission_value||0),0);
+    const commission=campaign.reduce((s,r)=>s+commissionLineTotal(r),0);
     return `<tr>
       <td>${o.order_date.split("-").reverse().join("/")}</td>
       <td><span class="cnpj-chip">${formatCNPJ(o.cnpj)}</span></td>
@@ -1185,7 +1236,7 @@ async function loadOrderCampaignItems(dateStr){
           </select>
         </div>
         <div class="campaign-commission-value-wrap hidden">
-          <label>Valor da comissão</label>
+          <label>Valor unitário da comissão</label>
           <input class="campaign-commission-value money-input" type="text" inputmode="numeric" placeholder="R$ 0,00">
         </div>
       </div>`).join("")
@@ -1485,8 +1536,16 @@ $("#noSaleForm")?.addEventListener("submit",async e=>{
   btn.textContent="FINALIZAR DIA SEM VENDA";
   if(error)return setMsg($("#noSaleMsg"),error.message);
   closeNoSaleDialog();
-  setMsg($("#finalizeDayMsg"),"Dia finalizado sem venda. A gerência já visualizará o fechamento e o motivo informado.","ok");
+  const mail=await notifyDayFinalizedByEmail(data?.sale_date||today());
+  if(mail.ok&&mail.skipped){
+    setMsg($("#finalizeDayMsg"),"Dia finalizado sem venda. A gerência já visualizará o fechamento e o motivo. Para esta região não há envio de alerta por e-mail.","ok");
+  }else if(mail.ok){
+    setMsg($("#finalizeDayMsg"),"Dia finalizado sem venda. A gerência foi avisada e o motivo foi enviado por e-mail.","ok");
+  }else{
+    setMsg($("#finalizeDayMsg"),"Dia finalizado sem venda. O fechamento foi salvo, mas o alerta por e-mail não pôde ser enviado agora.","ok");
+  }
   await loadRep();
+  await showTomorrowAgendaPopup();
 });
 
 $("#finalizeDayBtn")?.addEventListener("click",async()=>{
@@ -1518,6 +1577,7 @@ $("#finalizeDayBtn")?.addEventListener("click",async()=>{
     setMsg($("#finalizeDayMsg"),"Dia finalizado com sucesso. O fechamento foi confirmado, mas o alerta por e-mail não pôde ser enviado agora.","ok");
   }
   await loadRep();
+  await showTomorrowAgendaPopup();
 });
 
 
@@ -1536,7 +1596,7 @@ function repOrderExportRows(){
       SKUs:Number(o.sku_count||0),
       "Itens em Campanha":campaign.length,
       "Qtd Campanha":campaign.reduce((s,r)=>s+Number(r.quantity||0),0),
-      "Comissão":campaign.reduce((s,r)=>s+Number(r.commission_value||0),0),
+      "Comissão":campaign.reduce((s,r)=>s+commissionLineTotal(r),0),
       Valor:Number(o.amount||0)
     };
   });
@@ -1643,8 +1703,8 @@ function renderRepCommissionTracking(){
   const todayStr=today();
   const overdue=unpaid.filter(r=>r.due_date<todayStr);
   $("#repCommissionPendingCount").textContent=String(unpaid.length);
-  $("#repCommissionPendingValue").textContent=money(unpaid.reduce((s,r)=>s+Number(r.item?.commission_value||0),0));
-  $("#repCommissionPaidValue").textContent=money(paid.reduce((s,r)=>s+Number(r.item?.commission_value||0),0));
+  $("#repCommissionPendingValue").textContent=money(unpaid.reduce((s,r)=>s+commissionLineTotal(r.item),0));
+  $("#repCommissionPaidValue").textContent=money(paid.reduce((s,r)=>s+commissionLineTotal(r.item),0));
   $("#repCommissionPaidCount").textContent=`${paid.length} pagamento(s)`;
   $("#repCommissionOverdueCount").textContent=String(overdue.length);
   $("#repCommissionTable").innerHTML=rows.map(r=>`<tr>
@@ -1652,7 +1712,7 @@ function renderRepCommissionTracking(){
     <td><strong>${escapeHtml(r.order?.legal_name||"—")}</strong></td>
     <td>${escapeHtml(r.goal?.item_name||"ITEM DE CAMPANHA")}</td>
     <td>${Number(r.item?.quantity||0)}</td>
-    <td><strong>${money(Number(r.item?.commission_value||0))}</strong></td>
+    <td><strong>${money(commissionLineTotal(r.item))}</strong><small class="muted">${Number(r.item?.quantity||0)} × ${money(Number(r.item?.commission_value||0))}</small></td>
     <td><input class="compact-input commission-due-date" data-id="${r.id}" type="date" value="${r.due_date||""}"></td>
     <td><select class="compact-input commission-pay-status" data-id="${r.id}">
       <option value="pending" ${r.payment_status==="pending"?"selected":""}>Aguardando</option>
@@ -1735,6 +1795,12 @@ window.deleteAgendaItem=async(id)=>{
   if(error)return setMsg($("#agendaMsg"),error.message);
   await loadRepAgenda();
 };
+
+$("#closeTomorrowAgendaBtn")?.addEventListener("click",()=>$("#tomorrowAgendaDialog")?.close());
+$("#openTomorrowAgendaBtn")?.addEventListener("click",()=>{
+  $("#tomorrowAgendaDialog")?.close();
+  setRepTab("agenda");
+});
 
 // O fluxo oficial é exclusivamente por sales_orders + fechamento do dia.
 
@@ -2450,7 +2516,8 @@ function commissionRowsFiltered(){
         item:goal.item_name||"Item",
         qty:Number(r.quantity||0),
         orderNumber:order.order_number||"—",
-        commission:Number(r.commission_value||0)
+        commissionUnit:Number(r.commission_value||0),
+        commission:Number(r.quantity||0)*Number(r.commission_value||0)
       };
     })
     .filter(r=>(!repFilter||r.repId===repFilter)

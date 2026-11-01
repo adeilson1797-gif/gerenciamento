@@ -312,7 +312,7 @@
             </div>
             <div class="card">
               <div class="section-head"><div><h2>Itens com comissão</h2><p class="muted">A data sugerida inicialmente é 30 dias após a venda e pode ser alterada.</p></div></div>
-              <div class="table-wrap"><table><thead><tr><th>Venda</th><th>Cliente</th><th>Item</th><th>Qtd.</th><th>Comissão</th><th>Data pagamento</th><th>Pagou?</th><th>Ação</th></tr></thead><tbody id="repCommissionTable"></tbody></table></div>
+              <div class="table-wrap"><table><thead><tr><th>Venda</th><th>Cliente</th><th>Item</th><th>Qtd.</th><th>Comissão total</th><th>Data pagamento</th><th>Pagou?</th><th>Ação</th></tr></thead><tbody id="repCommissionTable"></tbody></table></div>
               <p id="repCommissionMsg" class="msg"></p>
             </div>
           </div>
@@ -500,6 +500,22 @@
         </div>
         <p id="noSaleMsg" class="msg"></p>
       </form>
+    </dialog>
+
+    <dialog id="tomorrowAgendaDialog" class="sapece-dialog">
+      <div class="dialog-card">
+        <div class="dialog-head">
+          <div><span class="eyebrow">AGENDA</span><h2>Confira a agenda de amanhã</h2></div>
+          <button id="closeTomorrowAgendaBtn" class="dialog-close" type="button" aria-label="Fechar">×</button>
+        </div>
+        <p class="muted">Data: <strong id="tomorrowAgendaDate">—</strong></p>
+        <p id="tomorrowAgendaSummary"></p>
+        <div id="tomorrowAgendaList" class="agenda-pop-list"></div>
+        <div class="dialog-actions">
+          <button id="openTomorrowAgendaBtn" class="btn btn-primary" type="button">ABRIR AGENDA</button>
+          <button id="closeTomorrowAgendaBtnBottom" class="btn btn-light" type="button" onclick="document.getElementById('tomorrowAgendaDialog').close()">FECHAR</button>
+        </div>
+      </div>
     </dialog>
 
     <section id="adminView" class="hidden">
