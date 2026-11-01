@@ -329,18 +329,22 @@ function enableAutomaticTablePagination(){
 
 
 function setAdminGuide(name){
-  const commission=name==="commission";
-  $("#adminMainGuide")?.classList.toggle("hidden",commission);
+  const main=name==="main", commission=name==="commission", users=name==="users";
+  $("#adminMainGuide")?.classList.toggle("hidden",!main);
   $("#adminCommissionGuide")?.classList.toggle("hidden",!commission);
-  $("#adminGuideMainBtn")?.classList.toggle("active",!commission);
+  $("#adminUsersGuide")?.classList.toggle("hidden",!users);
+  $("#adminGuideMainBtn")?.classList.toggle("active",main);
   $("#adminGuideCommissionBtn")?.classList.toggle("active",commission);
+  $("#adminGuideUsersBtn")?.classList.toggle("active",users);
   if(commission){
     renderCommissionGuide();
     ensureTableExportButtons("#adminCommissionGuide");
-    enableAutomaticTablePagination();
   }
+  if(users) updateManualUserRoleFields();
+  enableAutomaticTablePagination();
 }
 $("#adminGuideMainBtn")?.addEventListener("click",()=>setAdminGuide("main"));
+$("#adminGuideUsersBtn")?.addEventListener("click",()=>setAdminGuide("users"));
 $("#adminGuideCommissionBtn")?.addEventListener("click",()=>setAdminGuide("commission"));
 
 $("#adminGuideReopenDayBtn")?.addEventListener("click",()=>{
@@ -369,10 +373,15 @@ async function loadProfile(){
 async function boot(){
   const {data:{session}}=await sb.auth.getSession();
   if(!session){
-    user=null;profile=null;showOnly("#authView");$("#logoutBtn").classList.add("hidden");$("#sessionName").textContent="";return;
+    user=null;profile=null;showOnly("#authView");$("#logoutBtn").classList.add("hidden");$("#resetPanelBtn")?.classList.add("hidden");$("#sessionName").textContent="";return;
   }
   user=session.user; await loadProfile();
   if(!profile){showOnly("#authView");$("#sessionName").textContent=user.email||"";$("#logoutBtn").classList.remove("hidden");return;}
+  if(profile.active===false || profile.removed_at){
+    await sb.auth.signOut();
+    user=null;profile=null;showOnly("#authView");$("#logoutBtn").classList.add("hidden");$("#resetPanelBtn")?.classList.add("hidden");
+    return setMsg($("#loginMsg"),"Este cadastro está inativo. Procure o Administrador Geral.");
+  }
   $("#sessionName").textContent=profile.name;$("#logoutBtn").classList.remove("hidden");
   if(profile.must_change_password){
     showOnly("#forcePasswordView");
@@ -397,11 +406,11 @@ async function boot(){
     $("#managerRoleBadge").classList.toggle("regional-badge",isRegional);
 
     // Cadastros de representantes são exclusivos do Administrador Geral.
-    $("#manualRepCard")?.classList.toggle("hidden",!isMainAdmin);
+    $("#adminGuideUsersBtn")?.classList.toggle("hidden",!isMainAdmin);
+    $("#resetPanelBtn")?.classList.toggle("hidden",!isMainAdmin);
     if(isMainAdmin) updateManualUserRoleFields();
 
     $("#userManagementCard")?.classList.toggle("hidden",isDivisional);
-    $("#adminResetCard")?.classList.toggle("hidden",!isMainAdmin);
     $("#itemGoalCreateCard")?.classList.toggle("hidden",isDivisional);
     $("#distributorManagerCard")?.classList.toggle("hidden",isDivisional);
     if($("#distributorManagerHint")){
@@ -451,6 +460,7 @@ async function boot(){
     await loadAdmin();
     enableAutomaticTablePagination();
   } else {
+    $("#resetPanelBtn")?.classList.add("hidden");
     showOnly("#repView");
     setRepTab("sales");
     $("#repTitle").textContent=`${profile.job_title?profile.job_title+" — ":""}${profile.name}`;
@@ -486,15 +496,18 @@ $("#logoutBtn").addEventListener("click",async()=>{await sb.auth.signOut();await
 
 
 function setRepTab(tab){
-  const sales=tab==="sales";
-  $("#repSalesTab")?.classList.toggle("hidden",!sales);
-  $("#repClientBaseTab")?.classList.toggle("hidden",sales);
-  $("#repNavSales")?.classList.toggle("active",sales);
-  $("#repNavClients")?.classList.toggle("active",!sales);
-  if(!sales) loadClientBase();
+  const tabs={sales:"#repSalesTab",commission:"#repCommissionTab",agenda:"#repAgendaTab",clients:"#repClientBaseTab"};
+  Object.entries(tabs).forEach(([key,sel])=>$(sel)?.classList.toggle("hidden",key!==tab));
+  const nav={sales:"#repNavSales",commission:"#repNavCommission",agenda:"#repNavAgenda",clients:"#repNavClients"};
+  Object.entries(nav).forEach(([key,sel])=>$(sel)?.classList.toggle("active",key===tab));
+  if(tab==="clients") loadClientBase();
+  if(tab==="commission") loadRepCommissionTracking();
+  if(tab==="agenda") loadRepAgenda();
 }
 
 $("#repNavSales")?.addEventListener("click",()=>setRepTab("sales"));
+$("#repNavCommission")?.addEventListener("click",()=>setRepTab("commission"));
+$("#repNavAgenda")?.addEventListener("click",()=>setRepTab("agenda"));
 $("#repNavClients")?.addEventListener("click",()=>setRepTab("clients"));
 
 function resetClientBaseForm(){
@@ -1598,6 +1611,131 @@ async function loadRepDistributorSummary(){
 }
 
 // v6.3.4.1 — rotinas legadas de lançamento diário/distribuição manual removidas.
+
+let repCommissionTrackingCache=[];
+let repAgendaCache=[];
+
+async function loadRepCommissionTracking(){
+  if(profile?.role!=="rep")return;
+  const [{data:tracking,error:tErr},{data:items,error:iErr},{data:orders,error:oErr},{data:goals,error:gErr}]=await Promise.all([
+    sb.from("commission_payment_tracking").select("*").eq("user_id",user.id).order("due_date",{ascending:true}),
+    sb.from("order_campaign_items").select("*").eq("user_id",user.id),
+    sb.from("sales_orders").select("id,legal_name,cnpj,order_date").eq("user_id",user.id),
+    sb.from("item_goals").select("id,item_name")
+  ]);
+  if(tErr||iErr||oErr||gErr)return setMsg($("#repCommissionMsg"),(tErr||iErr||oErr||gErr)?.message||"Erro ao carregar comissões.");
+  const itemMap=Object.fromEntries((items||[]).map(x=>[String(x.id),x]));
+  const orderMap=Object.fromEntries((orders||[]).map(x=>[String(x.id),x]));
+  const goalMap=Object.fromEntries((goals||[]).map(x=>[String(x.id),x]));
+  repCommissionTrackingCache=(tracking||[]).map(t=>{
+    const item=itemMap[String(t.campaign_item_id)]||{};
+    const order=orderMap[String(item.order_id)]||{};
+    const goal=goalMap[String(item.goal_id)]||{};
+    return {...t,item,order,goal};
+  });
+  renderRepCommissionTracking();
+}
+
+function renderRepCommissionTracking(){
+  const rows=repCommissionTrackingCache||[];
+  const unpaid=rows.filter(r=>r.payment_status!=="paid");
+  const paid=rows.filter(r=>r.payment_status==="paid");
+  const todayStr=today();
+  const overdue=unpaid.filter(r=>r.due_date<todayStr);
+  $("#repCommissionPendingCount").textContent=String(unpaid.length);
+  $("#repCommissionPendingValue").textContent=money(unpaid.reduce((s,r)=>s+Number(r.item?.commission_value||0),0));
+  $("#repCommissionPaidValue").textContent=money(paid.reduce((s,r)=>s+Number(r.item?.commission_value||0),0));
+  $("#repCommissionPaidCount").textContent=`${paid.length} pagamento(s)`;
+  $("#repCommissionOverdueCount").textContent=String(overdue.length);
+  $("#repCommissionTable").innerHTML=rows.map(r=>`<tr>
+    <td>${escapeHtml((r.order?.order_date||r.item?.report_date||"").split("-").reverse().join("/"))}</td>
+    <td><strong>${escapeHtml(r.order?.legal_name||"—")}</strong></td>
+    <td>${escapeHtml(r.goal?.item_name||"ITEM DE CAMPANHA")}</td>
+    <td>${Number(r.item?.quantity||0)}</td>
+    <td><strong>${money(Number(r.item?.commission_value||0))}</strong></td>
+    <td><input class="compact-input commission-due-date" data-id="${r.id}" type="date" value="${r.due_date||""}"></td>
+    <td><select class="compact-input commission-pay-status" data-id="${r.id}">
+      <option value="pending" ${r.payment_status==="pending"?"selected":""}>Aguardando</option>
+      <option value="paid" ${r.payment_status==="paid"?"selected":""}>Sim, pago</option>
+      <option value="not_paid" ${r.payment_status==="not_paid"?"selected":""}>Não pago</option>
+    </select></td>
+    <td><button class="btn btn-xs btn-primary" onclick="saveCommissionPayment(${r.id})">Salvar</button></td>
+  </tr>`).join("")||`<tr><td colspan="8">Nenhum item com comissão para acompanhar.</td></tr>`;
+}
+
+window.saveCommissionPayment=async(id)=>{
+  const due=document.querySelector(`.commission-due-date[data-id="${id}"]`)?.value;
+  const status=document.querySelector(`.commission-pay-status[data-id="${id}"]`)?.value||"pending";
+  if(!due)return setMsg($("#repCommissionMsg"),"Informe a data prevista para o pagamento.");
+  const {error}=await sb.from("commission_payment_tracking").update({due_date:due,payment_status:status,paid_at:status==="paid"?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",user.id);
+  if(error)return setMsg($("#repCommissionMsg"),error.message);
+  setMsg($("#repCommissionMsg"),"Acompanhamento da comissão salvo.","ok");
+  await loadRepCommissionTracking();
+};
+
+async function loadRepAgenda(){
+  if(profile?.role!=="rep")return;
+  const {data,error}=await sb.from("rep_agenda").select("*").eq("user_id",user.id).order("visit_date",{ascending:true});
+  if(error)return setMsg($("#agendaMsg"),error.message);
+  repAgendaCache=data||[];
+  if($("#agendaVisitDate")&&!$("#agendaVisitDate").value){
+    const d=new Date();d.setDate(d.getDate()+7);$("#agendaVisitDate").value=localISODate(d);
+  }
+  renderRepAgenda();
+}
+
+function renderRepAgenda(){
+  const rows=repAgendaCache||[];
+  const todayStr=today();
+  const d7=new Date();d7.setDate(d7.getDate()+7);const next7=localISODate(d7);
+  const pending=rows.filter(r=>r.status==="pending");
+  $("#agendaPendingCount").textContent=String(pending.length);
+  $("#agendaNext7Count").textContent=String(pending.filter(r=>r.visit_date>=todayStr&&r.visit_date<=next7).length);
+  $("#agendaOverdueCount").textContent=String(pending.filter(r=>r.visit_date<todayStr).length);
+  $("#agendaTable").innerHTML=rows.map(r=>`<tr>
+    <td><input class="compact-input agenda-date" data-id="${r.id}" type="date" value="${r.visit_date}"></td>
+    <td><strong>${escapeHtml(r.legal_name)}</strong></td>
+    <td>${escapeHtml(r.cnpj?formatCNPJ(r.cnpj):"—")}</td>
+    <td>${r.source_order_id?'<span class="role-badge">Pedido</span>':'Manual'}</td>
+    <td>${escapeHtml(r.notes||"—")}</td>
+    <td><select class="compact-input agenda-status" data-id="${r.id}">
+      <option value="pending" ${r.status==="pending"?"selected":""}>Pendente</option>
+      <option value="completed" ${r.status==="completed"?"selected":""}>Concluída</option>
+      <option value="cancelled" ${r.status==="cancelled"?"selected":""}>Cancelada</option>
+    </select></td>
+    <td><div class="action-row"><button class="btn btn-xs btn-primary" onclick="saveAgendaItem(${r.id})">Salvar</button><button class="btn btn-xs btn-light danger" onclick="deleteAgendaItem(${r.id})">Excluir</button></div></td>
+  </tr>`).join("")||`<tr><td colspan="7">Nenhuma visita agendada.</td></tr>`;
+}
+
+$("#agendaForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();setMsg($("#agendaMsg"),"");
+  const legal_name=$("#agendaLegalName").value.trim().toUpperCase();
+  const rawCnpj=normalizeCNPJ($("#agendaCnpj").value||"");
+  const cnpj=rawCnpj||null;
+  if(cnpj && cnpj.length!==14)return setMsg($("#agendaMsg"),"CNPJ inválido.");
+  const visit_date=$("#agendaVisitDate").value;
+  const notes=$("#agendaNotes").value.trim().toUpperCase()||null;
+  const {error}=await sb.from("rep_agenda").insert({user_id:user.id,legal_name,cnpj,visit_date,notes,status:"pending"});
+  if(error)return setMsg($("#agendaMsg"),error.message);
+  $("#agendaLegalName").value="";$("#agendaCnpj").value="";$("#agendaNotes").value="";
+  setMsg($("#agendaMsg"),"Visita adicionada à agenda.","ok");
+  await loadRepAgenda();
+});
+
+window.saveAgendaItem=async(id)=>{
+  const visit_date=document.querySelector(`.agenda-date[data-id="${id}"]`)?.value;
+  const status=document.querySelector(`.agenda-status[data-id="${id}"]`)?.value||"pending";
+  const {error}=await sb.from("rep_agenda").update({visit_date,status,updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",user.id);
+  if(error)return setMsg($("#agendaMsg"),error.message);
+  setMsg($("#agendaMsg"),"Agenda atualizada.","ok");await loadRepAgenda();
+};
+window.deleteAgendaItem=async(id)=>{
+  if(!confirm("Excluir este agendamento?"))return;
+  const {error}=await sb.from("rep_agenda").delete().eq("id",id).eq("user_id",user.id);
+  if(error)return setMsg($("#agendaMsg"),error.message);
+  await loadRepAgenda();
+};
+
 // O fluxo oficial é exclusivamente por sales_orders + fechamento do dia.
 
 async function loadAdmin(){
@@ -1997,7 +2135,7 @@ function renderUserManagement(){
   if(!canManage) return;
 
   const isMainAdmin=profile.role==="admin";
-  const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id && p.role!=="admin");
+  const rows=(adminCache.allProfiles||[]).filter(p=>p.user_id!==user.id && p.role!=="admin" && !p.removed_at);
 
   $("#userManagementTable").innerHTML=rows.map(p=>`<tr>
     <td>${isMainAdmin?`<input class="inline-edit user-name" data-id="${p.user_id}" value="${escapeHtml(p.name||"")}">`:`<strong>${escapeHtml(p.name)}</strong>`}</td>
@@ -2022,7 +2160,8 @@ function renderUserManagement(){
     <td>${isMainAdmin?`<button class="btn btn-xs btn-light" onclick="resetUserPassword('${p.user_id}')">Resetar senha</button>`:'—'}</td>
     <td>
       <button class="btn btn-xs btn-primary" onclick="saveUserManagement('${p.user_id}',${p.active})">Salvar</button>
-      ${isMainAdmin?`<button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button>`:""}
+      ${isMainAdmin?`<button class="btn btn-xs btn-light ${p.active?"danger":""}" onclick="toggleUserActive('${p.user_id}',${p.active})">${p.active?"Desativar":"Ativar"}</button>
+      <button class="btn btn-xs btn-danger" onclick="removeUserRegistration('${p.user_id}','${String(p.name||"").replaceAll("'","&#39;")}')">REMOVER</button>`:""}
     </td>
   </tr>`).join("")||`<tr><td colspan="8">Nenhum outro usuário cadastrado.</td></tr>`;
 }
@@ -2066,6 +2205,20 @@ window.toggleUserActive=async(userId,isActive)=>{
   const {error}=await sb.from("profiles").update({active:!isActive}).eq("user_id",userId);
   if(error)return setMsg($("#userManagementMsg"),error.message);
   setMsg($("#userManagementMsg"),!isActive?"Usuário ativado.":"Usuário desativado.","ok");
+  await loadAdmin();
+};
+
+window.removeUserRegistration=async(userId,name)=>{
+  if(profile?.role!=="admin") return;
+  if(!confirm(`REMOVER o cadastro de ${name}?
+
+O acesso será bloqueado, mas todo o histórico de vendas, pedidos e campanhas será preservado.`)) return;
+  const typed=prompt(`Para confirmar, digite REMOVER:`);
+  if(String(typed||"").trim().toUpperCase()!=="REMOVER") return setMsg($("#userManagementMsg"),"Remoção cancelada.");
+  setMsg($("#userManagementMsg"),"Removendo acesso do funcionário...");
+  const {data,error}=await sb.functions.invoke("admin-remove-user",{body:{target_user_id:userId}});
+  if(error || data?.error) return setMsg($("#userManagementMsg"),data?.error||error?.message||"Não foi possível remover o cadastro.");
+  setMsg($("#userManagementMsg"),"Cadastro removido do acesso ativo. Histórico preservado.","ok");
   await loadAdmin();
 };
 
@@ -2483,28 +2636,21 @@ window.deleteDistributor=async(id)=>{
 
 
 function renderItemGoalsManager(){
-  const goals=adminCache.itemGoals||[],reports=adminCache.itemReports||[],activeReps=adminCache.reps||[];
+  const goals=adminCache.itemGoals||[],activeReps=adminCache.reps||[];
   const todayStr=today();
   const repNames=Object.fromEntries(activeReps.map(r=>[r.user_id,r.name]));
   const individualGoals=goals.filter(g=>g.assigned_user_id);
-
   $("#itemGoalsTable").innerHTML=individualGoals.map(g=>{
-    const relevant=reports.filter(r=>r.goal_id===g.id&&r.user_id===g.assigned_user_id);
-    const soldQty=relevant.reduce((s,r)=>s+Number(r.quantity||0),0);
-    const pct=Number(g.target_quantity)>0?soldQty/Number(g.target_quantity):0;
-    const answeredToday=relevant.some(r=>r.report_date===todayStr);
     const inPeriod=todayStr>=g.start_date&&todayStr<=g.end_date&&g.active;
     return `<tr>
       <td><strong>${escapeHtml(repNames[g.assigned_user_id]||"Representante")}</strong></td>
-      <td><strong>${escapeHtml(g.item_name)}</strong><br><span class="goal-status-pill ${inPeriod?"":"closed"}">${inPeriod?"Ativa":"Fora do período"}</span></td>
-      <td>${g.start_date.split("-").reverse().join("/")}<br>${g.end_date.split("-").reverse().join("/")}</td>
+      <td><strong>${escapeHtml(g.item_name)}</strong></td>
+      <td>${g.start_date.split("-").reverse().join("/")} até ${g.end_date.split("-").reverse().join("/")}</td>
       <td>${g.target_quantity}</td>
-      <td>${soldQty}</td>
-      <td>${(pct*100).toFixed(1)}%<div class="progress-mini"><i style="width:${Math.min(pct*100,100)}%"></i></div></td>
-      <td>${answeredToday?"Sim":"Pendente"}</td>
+      <td><span class="goal-status-pill ${inPeriod?"":"closed"}">${inPeriod?"Ativa":g.active?"Fora do período":"Encerrada"}</span></td>
       <td>${["admin","sub_admin"].includes(profile?.role)?`<button class="btn btn-xs btn-light" onclick="toggleItemGoal(${g.id},${g.active})">${g.active?"Encerrar":"Reativar"}</button>`:'<span class="muted">Consulta</span>'}</td>
     </tr>`;
-  }).join("")||`<tr><td colspan="8">Nenhuma meta individual por item criada.</td></tr>`;
+  }).join("")||`<tr><td colspan="6">Nenhuma meta individual por item criada.</td></tr>`;
 }
 
 $("#itemGoalForm")?.addEventListener("submit",async e=>{
@@ -2684,6 +2830,8 @@ $("#resetPanelBtn")?.addEventListener("click",async()=>{
 
   setMsg($("#resetPanelMsg"),"Resetando painel...");
   const operations=[
+    ()=>sb.from("rep_agenda").delete().not("id","is",null),
+    ()=>sb.from("commission_payment_tracking").delete().not("id","is",null),
     ()=>sb.from("item_goal_reports").delete().not("id","is",null),
     ()=>sb.from("sales_orders").delete().not("id","is",null),
     ()=>sb.from("rep_day_closures").delete().not("id","is",null),
@@ -2703,6 +2851,7 @@ $("#resetPanelBtn")?.addEventListener("click",async()=>{
   }
 
   setMsg($("#resetPanelMsg"),"Painel operacional resetado com sucesso. Usuários, acessos e cargos foram preservados.","ok");
+  alert("Painel operacional resetado com sucesso. Usuários, acessos e cargos foram preservados.");
   await loadAdmin();
 });
 

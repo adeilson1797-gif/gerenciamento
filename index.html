@@ -21,7 +21,9 @@
     </div>
     <div class="top-actions">
       <span id="sessionName"></span>
+      <button id="resetPanelBtn" class="btn btn-danger hidden" type="button">RESET PAINEL</button>
       <button id="logoutBtn" class="btn btn-outline hidden">Sair</button>
+      <span id="resetPanelMsg" class="msg top-reset-msg"></span>
     </div>
   </header>
 
@@ -68,6 +70,8 @@
         <aside class="rep-side-nav">
           <div class="rep-side-title">Menu</div>
           <button id="repNavSales" class="rep-nav-btn active" type="button">📊 Acompanhamento de vendas</button>
+          <button id="repNavCommission" class="rep-nav-btn" type="button">💰 Comissões</button>
+          <button id="repNavAgenda" class="rep-nav-btn" type="button">📅 Agenda</button>
           <button id="repNavClients" class="rep-nav-btn" type="button">👥 Base Clientes</button>
         </aside>
         <div class="rep-main-content">
@@ -296,6 +300,49 @@
     
           </div>
 
+
+          <div id="repCommissionTab" class="hidden">
+            <div class="hero split">
+              <div><span class="eyebrow">COMISSÕES</span><h1>Acompanhamento de pagamentos</h1><p class="muted">Acompanhe os itens de campanha que possuem comissão, defina a data de pagamento e confirme quando o pagamento for realizado.</p></div>
+            </div>
+            <div class="grid grid-3 mini-grid">
+              <div class="kpi"><span>Campanhas a serem pagas</span><strong id="repCommissionPendingCount">0</strong><small id="repCommissionPendingValue">R$ 0,00</small></div>
+              <div class="kpi"><span>Total pago</span><strong id="repCommissionPaidValue">R$ 0,00</strong><small id="repCommissionPaidCount">0 pagamento(s)</small></div>
+              <div class="kpi"><span>Vencidas / não pagas</span><strong id="repCommissionOverdueCount">0</strong><small>Requer atenção</small></div>
+            </div>
+            <div class="card">
+              <div class="section-head"><div><h2>Itens com comissão</h2><p class="muted">A data sugerida inicialmente é 30 dias após a venda e pode ser alterada.</p></div></div>
+              <div class="table-wrap"><table><thead><tr><th>Venda</th><th>Cliente</th><th>Item</th><th>Qtd.</th><th>Comissão</th><th>Data pagamento</th><th>Pagou?</th><th>Ação</th></tr></thead><tbody id="repCommissionTable"></tbody></table></div>
+              <p id="repCommissionMsg" class="msg"></p>
+            </div>
+          </div>
+
+          <div id="repAgendaTab" class="hidden">
+            <div class="hero split">
+              <div><span class="eyebrow">AGENDA</span><h1>Próximas visitas</h1><p class="muted">Cada novo pedido agenda automaticamente uma próxima visita. Você também pode adicionar clientes manualmente.</p></div>
+            </div>
+            <div class="grid grid-3 mini-grid">
+              <div class="kpi"><span>Visitas pendentes</span><strong id="agendaPendingCount">0</strong></div>
+              <div class="kpi"><span>Próximos 7 dias</span><strong id="agendaNext7Count">0</strong></div>
+              <div class="kpi"><span>Atrasadas</span><strong id="agendaOverdueCount">0</strong></div>
+            </div>
+            <div class="card">
+              <div class="section-head"><div><h2>Adicionar à agenda</h2><p class="muted">Use para agendar uma visita que não veio automaticamente de um pedido.</p></div></div>
+              <form id="agendaForm" class="grid grid-2">
+                <div><label>Razão Social</label><input id="agendaLegalName" required placeholder="RAZÃO SOCIAL"></div>
+                <div><label>CNPJ (opcional)</label><input id="agendaCnpj" maxlength="18" placeholder="00.000.000/0000-00"></div>
+                <div><label>Data da visita</label><input id="agendaVisitDate" type="date" required></div>
+                <div><label>Observação</label><input id="agendaNotes" placeholder="EX.: RETORNO COM O COMPRADOR"></div>
+                <div><button class="btn btn-primary" type="submit">ADICIONAR À AGENDA</button></div>
+              </form>
+              <p id="agendaMsg" class="msg"></p>
+            </div>
+            <div class="card">
+              <div class="section-head"><div><h2>Agenda de visitas</h2><p class="muted">Atualize a data, marque a visita como concluída ou remova o agendamento.</p></div></div>
+              <div class="table-wrap"><table><thead><tr><th>Data</th><th>Razão Social</th><th>CNPJ</th><th>Origem</th><th>Observação</th><th>Status</th><th>Ações</th></tr></thead><tbody id="agendaTable"></tbody></table></div>
+            </div>
+          </div>
+
           <div id="repClientBaseTab" class="hidden">
             <div class="hero split">
               <div>
@@ -474,6 +521,7 @@
 
       <div id="adminGuideTabs" class="admin-guide-tabs">
         <button id="adminGuideMainBtn" class="admin-guide-btn active" type="button">📊 Painel Gerencial</button>
+        <button id="adminGuideUsersBtn" class="admin-guide-btn hidden" type="button">👤 Cadastro de Usuários</button>
         <button id="adminGuideCommissionBtn" class="admin-guide-btn" type="button">💰 Comissão</button>
         <button id="adminGuideReopenDayBtn" class="admin-guide-btn hidden" type="button">🔓 LIBERAR DIA</button>
       </div>
@@ -549,16 +597,7 @@
         <div class="kpi"><span>Atingimento dos itens</span><strong id="admItemPct">—</strong></div>
         <div class="kpi"><span>Falta nas metas por item</span><strong id="admItemRemaining">0 un.</strong></div>
       </div>
-      <div id="adminResetCard" class="card danger-zone hidden">
-        <div class="section-head">
-          <div>
-            <h2>Resetar painel operacional</h2>
-            <p class="muted">Exclusivo do Administrador Geral. Limpa vendas, metas por item, respostas dos itens, convites e zera as metas mensais. Os usuários, acessos e cargos permanecem cadastrados.</p>
-          </div>
-          <button id="resetPanelBtn" class="btn btn-danger" type="button">Resetar painel</button>
-        </div>
-        <p id="resetPanelMsg" class="msg"></p>
-      </div>
+      
 
       <div class="grid grid-3 mini-grid">
         <div class="mini-kpi"><span>Representantes ativos</span><strong id="admActive">0</strong></div>
@@ -740,13 +779,13 @@
       <div id="itemGoalsTrackingCard" class="card">
         <div class="section-head">
           <div>
-            <h2>Metas ativas e acompanhamento</h2>
-            <p class="muted">Acompanhe as metas individuais por representante, item, realizado e percentual.</p>
+            <h2>Metas ativas</h2>
+            <p class="muted">Lista simplificada das metas cadastradas. O desempenho detalhado permanece na área “Desempenho das metas por item”.</p>
           </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Representante</th><th>Item</th><th>Período</th><th>Meta</th><th>Vendido</th><th>%</th><th>Informou hoje</th><th>Ação</th></tr></thead>
+            <thead><tr><th>Representante</th><th>Item</th><th>Período</th><th>Meta</th><th>Status</th><th>Ação</th></tr></thead>
             <tbody id="itemGoalsTable"></tbody>
           </table>
         </div>
@@ -856,54 +895,7 @@
         </div>
       </div>
 
-      <div id="manualRepCard" class="card hidden">
-        <div class="section-head">
-          <div>
-            <h2>Cadastro de usuários</h2>
-            <p class="muted">Exclusivo do Administrador Geral. Crie representantes e perfis gerenciais diretamente, sem convite e sem cadastro pela tela de login.</p>
-          </div>
-        </div>
-        <form id="manualRepForm" class="grid grid-2">
-          <div>
-            <label>Tipo de acesso</label>
-            <select id="manualRepRole" required>
-              <option value="rep">Representante</option>
-              <option value="regional_manager">Gerente Regional</option>
-              <option value="sub_admin">Subadministrador</option>
-              <option value="divisional_manager">Gerente Divisional</option>
-            </select>
-          </div>
-          <div>
-            <label>Nome</label>
-            <input id="manualRepName" required placeholder="EX.: JOÃO SILVA">
-          </div>
-          <div>
-            <label>E-mail</label>
-            <input id="manualRepEmail" type="email" required placeholder="email@exemplo.com">
-          </div>
-          <div>
-            <label>Senha inicial</label>
-            <input id="manualRepPassword" type="password" required minlength="8" placeholder="Mínimo 8 caracteres">
-          </div>
-          <div id="manualRepStateWrap">
-            <label>Estado / UF do representante</label>
-            <input id="manualRepState" maxlength="2" placeholder="EX.: PE">
-          </div>
-          <div id="manualRepManagedStatesWrap" class="hidden">
-            <label>UFs administradas pelo Gerente Regional</label>
-            <input id="manualRepManagedStates" placeholder="EX.: PE, PB, RN">
-            <small class="muted">Separe as UFs por vírgula.</small>
-          </div>
-          <div id="manualRepTargetWrap">
-            <label>Meta mensal (R$)</label>
-            <input id="manualRepTarget" class="money-input" type="text" inputmode="numeric" value="R$ 0,00" placeholder="R$ 0,00" autocomplete="off">
-          </div>
-          <div style="display:flex;align-items:end">
-            <button id="manualRepSubmit" class="btn btn-primary" type="submit" style="width:100%">CADASTRAR USUÁRIO</button>
-          </div>
-        </form>
-        <p id="manualRepMsg" class="msg"></p>
-      </div>
+      
 
       <div id="positiveCnpjCard" class="card">
         <div class="section-head">
@@ -961,6 +953,58 @@
         </div>
       </div>
       </div><!-- /adminMainGuide -->
+
+      <div id="adminUsersGuide" class="hidden">
+<div id="manualRepCard" class="card">
+        <div class="section-head">
+          <div>
+            <h2>Cadastro de usuários</h2>
+            <p class="muted">Exclusivo do Administrador Geral. Crie representantes e perfis gerenciais diretamente, sem convite e sem cadastro pela tela de login.</p>
+          </div>
+        </div>
+        <form id="manualRepForm" class="grid grid-2">
+          <div>
+            <label>Tipo de acesso</label>
+            <select id="manualRepRole" required>
+              <option value="rep">Representante</option>
+              <option value="regional_manager">Gerente Regional</option>
+              <option value="sub_admin">Subadministrador</option>
+              <option value="divisional_manager">Gerente Divisional</option>
+            </select>
+          </div>
+          <div>
+            <label>Nome</label>
+            <input id="manualRepName" required placeholder="EX.: JOÃO SILVA">
+          </div>
+          <div>
+            <label>E-mail</label>
+            <input id="manualRepEmail" type="email" required placeholder="email@exemplo.com">
+          </div>
+          <div>
+            <label>Senha inicial</label>
+            <input id="manualRepPassword" type="password" required minlength="8" placeholder="Mínimo 8 caracteres">
+          </div>
+          <div id="manualRepStateWrap">
+            <label>Estado / UF do representante</label>
+            <input id="manualRepState" maxlength="2" placeholder="EX.: PE">
+          </div>
+          <div id="manualRepManagedStatesWrap" class="hidden">
+            <label>UFs administradas pelo Gerente Regional</label>
+            <input id="manualRepManagedStates" placeholder="EX.: PE, PB, RN">
+            <small class="muted">Separe as UFs por vírgula.</small>
+          </div>
+          <div id="manualRepTargetWrap">
+            <label>Meta mensal (R$)</label>
+            <input id="manualRepTarget" class="money-input" type="text" inputmode="numeric" value="R$ 0,00" placeholder="R$ 0,00" autocomplete="off">
+          </div>
+          <div style="display:flex;align-items:end">
+            <button id="manualRepSubmit" class="btn btn-primary" type="submit" style="width:100%">CADASTRAR USUÁRIO</button>
+          </div>
+        </form>
+        <p id="manualRepMsg" class="msg"></p>
+      </div>
+      </div>
+
 
       <div id="adminCommissionGuide" class="hidden">
         <div class="card commission-hero-card">

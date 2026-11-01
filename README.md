@@ -738,3 +738,13 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Motivo é obrigatório e armazenado em CAIXA ALTA.
 - O dia passa a constar como finalizado na gerência, com status "Sem venda" e motivo visível.
 - Nenhuma venda de R$ 0,00 é criada; o fechamento sem venda é registrado separadamente em rep_day_closures.
+
+
+## SAPECE v6.3.7
+- Guia Comissões no painel do representante: data prevista, status pago/não pago e totais pendente/pago.
+- Guia Agenda: novos pedidos criam próxima visita automaticamente em 30 dias; também permite inclusão manual.
+- Filtros de data do ADM alinhados em uma linha no desktop.
+- RESET PAINEL movido para o topo, ao lado de Sair.
+- Cadastro de usuários virou guia exclusiva do Administrador Geral.
+- Administrador Geral pode remover acesso de funcionário sem apagar histórico.
+- Metas ativas simplificadas; desempenho detalhado continua em Desempenho das metas por item.

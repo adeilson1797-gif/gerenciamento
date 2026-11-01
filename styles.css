@@ -587,3 +587,16 @@ textarea { text-transform: uppercase; }
   color:#7b887f;
   opacity:1;
 }
+
+
+/* SAPECE v6.3.7 */
+.manager-filter-stack{display:flex;align-items:flex-end;gap:12px;flex-wrap:nowrap}
+.manager-date-filter{display:flex;align-items:flex-end;gap:8px;flex-wrap:nowrap}
+.manager-date-filter>div{min-width:145px}
+.top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.top-reset-msg{display:none!important}
+#resetPanelBtn{white-space:nowrap;background:#b91c1c;color:#fff;border-color:#b91c1c}
+#repCommissionTable input,#repCommissionTable select,#agendaTable input,#agendaTable select{min-width:135px}
+#repCommissionTab .kpi small,#repAgendaTab .kpi small{display:block;margin-top:6px}
+#adminUsersGuide .card{margin-top:16px}
+@media(max-width:900px){.manager-filter-stack,.manager-date-filter{flex-wrap:wrap}.manager-date-filter>div{min-width:0;flex:1 1 140px}}
