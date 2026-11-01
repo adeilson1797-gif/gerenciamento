@@ -1,3 +1,13 @@
+# SAPECE v6.3.8.1 — Revisão Geral de Integridade
+
+Revisão da v6.3.8 com correções de integridade e segurança:
+- correção do fluxo de criação do acompanhamento de comissão para novos itens comissionados;
+- representante pode alterar somente data/status de pagamento da comissão, sem trocar vínculos internos;
+- botão FINALIZAR O DIA volta ao estado normal se o fechamento falhar;
+- RPCs internas antigas deixaram de ser executáveis diretamente pelo usuário;
+- índices adicionados para FKs apontadas pelo advisor do Supabase;
+- validação de sintaxe, IDs HTML/JS e integridade do pacote.
+
 ## SAPECE v6.3.5.2 — revisão geral do projeto
 
 - Corrigida a mensagem de fechamento para regiões sem alerta por e-mail (fora de PB/RN).

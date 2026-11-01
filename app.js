@@ -1564,6 +1564,8 @@ $("#finalizeDayBtn")?.addEventListener("click",async()=>{
 
   const {data,error}=await sb.rpc("finalize_sales_day",{p_sale_date:s.dateStr});
   if(error){
+    btn.disabled=false;
+    btn.textContent="FINALIZAR O DIA";
     renderDayFinalizationState();
     return setMsg($("#finalizeDayMsg"),error.message);
   }
