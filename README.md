@@ -1,3 +1,10 @@
+# SAPECE v6.3.8.2 — Exclusão de pedido em standby
+
+- Representante pode apagar somente o próprio pedido em STANDBY.
+- Pedido finalizado permanece bloqueado para exclusão pelo representante.
+- Itens de campanha, acompanhamento de comissão e agenda vinculados ao pedido apagado são removidos pelos relacionamentos do banco.
+- Backend mantém a regra RLS `sales_orders_delete_self_pending`.
+
 # SAPECE v6.3.8.1 — Revisão Geral de Integridade
 
 Revisão da v6.3.8 com correções de integridade e segurança:

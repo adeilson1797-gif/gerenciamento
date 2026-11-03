@@ -1081,8 +1081,11 @@ async function loadRepOrders(){
       <td>${o.finalized_at
         ? `<span class="locked-sale-badge">✅ Finalizado</span>`
         : `<span class="standby-sale-badge">⏳ Standby</span>`}</td>
+      <td>${o.finalized_at
+        ? '<span class="muted">—</span>'
+        : `<button class="btn btn-xs btn-light danger" type="button" onclick="deleteRepPendingOrder(${o.id})">Apagar</button>`}</td>
     </tr>`;
-  }).join("")||`<tr><td colspan="12">Nenhum pedido registrado no período selecionado.</td></tr>`;
+  }).join("")||`<tr><td colspan="13">Nenhum pedido registrado no período selecionado.</td></tr>`;
 
   const finalizedOrders=repOrdersCache.filter(o=>o.finalized_at);
   const skuTotal=finalizedOrders.reduce((s,o)=>s+Number(o.sku_count||0),0);
@@ -1095,6 +1098,35 @@ async function loadRepOrders(){
   renderDayFinalizationState();
   loadOrderCampaignItems($("#orderDate")?.value||today()).catch(err=>console.error("Campanhas:",err));
 }
+
+
+window.deleteRepPendingOrder=async(orderId)=>{
+  if(!user||profile?.role!=="rep")return;
+  const order=(repOrdersCache||[]).find(o=>Number(o.id)===Number(orderId));
+  if(!order)return alert("Pedido não encontrado.");
+  if(order.finalized_at)return alert("Pedido finalizado não pode ser apagado pelo representante.");
+
+  const ok=confirm(`Apagar o pedido em STANDBY ${order.order_number} de ${order.legal_name}, no valor de ${money(order.amount)}?\n\nOs itens de campanha, comissão e agenda vinculados a este pedido em standby também serão removidos.`);
+  if(!ok)return;
+
+  try{
+    const {data,error}=await sb.from("sales_orders")
+      .delete()
+      .eq("id",order.id)
+      .eq("user_id",user.id)
+      .is("finalized_at",null)
+      .select("id");
+    if(error)throw error;
+    if(!data?.length)throw new Error("O pedido não está mais em standby ou você não possui permissão para apagá-lo.");
+
+    delete repOrderCampaignMap[String(order.id)];
+    setMsg($("#orderMsg"),`Pedido ${order.order_number} apagado do standby.`,"ok");
+    await loadRepOrders();
+  }catch(err){
+    console.error("Apagar pedido standby:",err);
+    alert("Não foi possível apagar o pedido em standby: "+(err?.message||err));
+  }
+};
 
 function setOrderFormLockedForDate(locked){
   const form=$("#orderForm");
