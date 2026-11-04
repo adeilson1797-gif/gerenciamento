@@ -772,3 +772,10 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Comissão total calculada como quantidade x valor unitário da comissão.
 - Alerta no login para comissões com pagamento previsto para o dia seguinte.
 - Após finalizar o dia, popup para conferir a agenda do dia seguinte.
+
+
+## v6.3.8.3 — prevenção de pedido duplicado
+- Bloqueio de clique duplo/reenvio ao salvar pedido.
+- Conferência prévia de Representante + Distribuidora + Número do pedido.
+- Mensagem amigável quando o pedido já existe em STANDBY ou FINALIZADO.
+- Mantida a restrição de unicidade no banco para evitar duplicidade no resultado.

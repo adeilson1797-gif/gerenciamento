@@ -1445,9 +1445,12 @@ $("#orderCnpj")?.addEventListener("input",()=>{
 $("#orderCnpj")?.addEventListener("change",autofillCustomerByCnpj);
 $("#orderLegalName")?.addEventListener("change",autofillCustomerByName);
 
+let orderSaveInProgress=false;
+
 $("#orderForm")?.addEventListener("submit",async e=>{
   e.preventDefault();setMsg($("#orderMsg"),"");
   if(profile?.role!=="rep") return;
+  if(orderSaveInProgress)return setMsg($("#orderMsg"),"O pedido já está sendo salvo. Aguarde a conclusão.");
 
   const cnpj=normalizeCNPJ($("#orderCnpj").value);
   const legal_name=$("#orderLegalName").value.trim();
@@ -1490,10 +1493,29 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   const safeCity=canonical?.city||city;
   const safeState=(canonical?.state||state).toUpperCase();
 
+  // Evita duplicidade antes de tentar gravar e devolve uma mensagem útil ao representante.
+  const {data:existingOrder,error:dupCheckError}=await sb.from("sales_orders")
+    .select("id,order_date,legal_name,order_number,finalized_at")
+    .eq("user_id",user.id)
+    .eq("distributor_id",distributor_id)
+    .eq("order_number",order_number)
+    .maybeSingle();
+  if(dupCheckError)return setMsg($("#orderMsg"),"Não foi possível conferir o número do pedido: "+dupCheckError.message);
+  if(existingOrder){
+    const status=existingOrder.finalized_at?"FINALIZADO":"EM STANDBY";
+    const dateFmt=String(existingOrder.order_date||"").split("-").reverse().join("/");
+    return setMsg($("#orderMsg"),`O pedido ${order_number} já está cadastrado (${status}) em ${dateFmt}, para ${existingOrder.legal_name||"este cliente"}. Não é necessário lançar novamente.`);
+  }
+
+  const submitBtn=e.submitter||$("#orderForm button[type='submit']");
+  orderSaveInProgress=true;
+  if(submitBtn){submitBtn.disabled=true;submitBtn.dataset.originalText=submitBtn.textContent;submitBtn.textContent="Salvando pedido...";}
+
+  try{
   const {data:customer,error:cErr}=await sb.from("customers")
     .upsert({user_id:user.id,cnpj,legal_name:safeLegalName,city:safeCity,state:safeState},{onConflict:"user_id,cnpj"})
     .select().single();
-  if(cErr)return setMsg($("#orderMsg"),cErr.message);
+  if(cErr)throw cErr;
 
   const {data:savedOrder,error:oErr}=await sb.from("sales_orders").insert({
     user_id:user.id,
@@ -1508,7 +1530,12 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     amount,
     sku_count
   }).select().single();
-  if(oErr)return setMsg($("#orderMsg"),oErr.message);
+  if(oErr){
+    if(oErr.code==="23505" || String(oErr.message||"").includes("sales_orders_user_id_distributor_id_order_number_key")){
+      throw new Error(`O pedido ${order_number} já está cadastrado para esta distribuidora. Confira os pedidos em STANDBY antes de lançar novamente.`);
+    }
+    throw oErr;
+  }
 
   if(campaignData.rows.length){
     const campaignRows=campaignData.rows.map(r=>({
@@ -1523,7 +1550,7 @@ $("#orderForm")?.addEventListener("submit",async e=>{
     const {error:campaignError}=await sb.from("order_campaign_items").insert(campaignRows);
     if(campaignError){
       await sb.from("sales_orders").delete().eq("id",savedOrder.id).eq("user_id",user.id);
-      return setMsg($("#orderMsg"),`Não foi possível salvar os itens da campanha: ${campaignError.message}`);
+      throw new Error(`Não foi possível salvar os itens da campanha: ${campaignError.message}`);
     }
   }
 
@@ -1532,6 +1559,13 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   $("#orderNumber").value="";
   $("#orderSkuCount").value="";
   await loadRep();
+  }catch(err){
+    console.error("Salvar pedido:",err);
+    setMsg($("#orderMsg"),err?.message||String(err));
+  }finally{
+    orderSaveInProgress=false;
+    if(submitBtn){submitBtn.disabled=false;submitBtn.textContent=submitBtn.dataset.originalText||"Salvar pedido em standby";}
+  }
 });
 
 function closeNoSaleDialog(){
