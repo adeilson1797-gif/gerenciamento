@@ -669,12 +669,19 @@ function findBaseConflict(cnpj,legalName){
   const normalizedCnpj=normalizeCNPJ(cnpj);
   const normalizedName=normalizeLegalName(legalName);
   const byCnpj=clientBaseCache.find(c=>normalizeCNPJ(c.cnpj)===normalizedCnpj);
-  const byName=clientBaseCache.find(c=>normalizeLegalName(c.legal_name)===normalizedName);
+  const sameNameRows=clientBaseCache.filter(c=>normalizeLegalName(c.legal_name)===normalizedName);
 
-  if(byCnpj && normalizeLegalName(byCnpj.legal_name)!==normalizedName){
-    return {type:"cnpj_name",base:byCnpj,message:`O CNPJ ${formatCNPJ(normalizedCnpj)} está cadastrado na Base como "${byCnpj.legal_name}".`};
+  // CNPJ é a chave principal do cliente. Redes podem ter matriz e filiais com a mesma Razão Social.
+  if(byCnpj){
+    if(normalizeLegalName(byCnpj.legal_name)!==normalizedName){
+      return {type:"cnpj_name",base:byCnpj,message:`O CNPJ ${formatCNPJ(normalizedCnpj)} está cadastrado na Base como "${byCnpj.legal_name}".`};
+    }
+    return null;
   }
-  if(byName && normalizeCNPJ(byName.cnpj)!==normalizedCnpj){
+
+  // Só tratamos a Razão como vínculo exclusivo quando ela existe em um único CNPJ na Base.
+  if(sameNameRows.length===1 && normalizeCNPJ(sameNameRows[0].cnpj)!==normalizedCnpj){
+    const byName=sameNameRows[0];
     return {type:"name_cnpj",base:byName,message:`A razão "${byName.legal_name}" está cadastrada com o CNPJ ${formatCNPJ(byName.cnpj)}.`};
   }
   return null;
@@ -1414,8 +1421,13 @@ $("#goClientBaseBtn")?.addEventListener("click",()=>setRepTab("clients"));
 function findOrderBaseClientByCnpj(cnpj){
   return (clientBaseCache||[]).find(c=>normalizeCNPJ(c.cnpj)===normalizeCNPJ(cnpj));
 }
+function findOrderBaseClientsByName(name){
+  const normalized=normalizeLegalName(name);
+  return (clientBaseCache||[]).filter(c=>normalizeLegalName(c.legal_name)===normalized);
+}
 function findOrderBaseClientByName(name){
-  return (clientBaseCache||[]).find(c=>normalizeLegalName(c.legal_name)===normalizeLegalName(name));
+  const matches=findOrderBaseClientsByName(name);
+  return matches.length===1?matches[0]:null;
 }
 
 function autofillCustomerByCnpj(){
@@ -1429,7 +1441,14 @@ function autofillCustomerByCnpj(){
 }
 function autofillCustomerByName(){
   const name=$("#orderLegalName").value.trim();
-  const match=findOrderBaseClientByName(name)||repCustomersCache.find(c=>normalizeLegalName(c.legal_name)===normalizeLegalName(name));
+  const baseMatches=findOrderBaseClientsByName(name);
+  // Quando a mesma Razão Social possui matriz/filiais, não escolher um CNPJ arbitrariamente.
+  if(baseMatches.length>1){
+    setMsg($("#orderMsg"),"Esta Razão Social possui mais de um CNPJ na Base Clientes. Informe o CNPJ correto da unidade para continuar.");
+    return;
+  }
+  const customerMatches=(repCustomersCache||[]).filter(c=>normalizeLegalName(c.legal_name)===normalizeLegalName(name));
+  const match=baseMatches[0]||(customerMatches.length===1?customerMatches[0]:null);
   if(match){
     $("#orderCnpj").value=formatCNPJ(match.cnpj);
     $("#orderCity").value=match.city||"";
@@ -1475,14 +1494,16 @@ $("#orderForm")?.addEventListener("submit",async e=>{
   if(!campaignData.ok)return setMsg($("#orderMsg"),campaignData.message);
 
   const baseByCnpj=findOrderBaseClientByCnpj(cnpj);
-  const baseByName=findOrderBaseClientByName(legal_name);
+  const baseNameMatches=findOrderBaseClientsByName(legal_name);
+  const baseByName=baseNameMatches.length===1?baseNameMatches[0]:null;
 
   if(baseByCnpj && normalizeLegalName(baseByCnpj.legal_name)!==normalizeLegalName(legal_name)){
     $("#orderDataConflictBox").classList.remove("hidden");
     $("#orderDataConflictText").textContent=`Este CNPJ pertence a "${baseByCnpj.legal_name}" na Base Clientes. Corrija a Razão Social antes de salvar o pedido.`;
     return setMsg($("#orderMsg"),`Conflito: o CNPJ ${formatCNPJ(cnpj)} está cadastrado como "${baseByCnpj.legal_name}".`);
   }
-  if(baseByName && normalizeCNPJ(baseByName.cnpj)!==cnpj){
+  // Se o CNPJ informado existe e confere, ele prevalece. Razões repetidas são válidas para matriz/filiais.
+  if(!baseByCnpj && baseByName && normalizeCNPJ(baseByName.cnpj)!==cnpj){
     $("#orderDataConflictBox").classList.remove("hidden");
     $("#orderDataConflictText").textContent=`A Razão Social "${baseByName.legal_name}" pertence ao CNPJ ${formatCNPJ(baseByName.cnpj)} na Base Clientes. Corrija o CNPJ antes de salvar.`;
     return setMsg($("#orderMsg"),`Conflito: a Razão Social informada está vinculada a outro CNPJ na Base Clientes.`);

@@ -779,3 +779,10 @@ As distribuidoras ativas agora carregam antes e de forma independente das campan
 - Conferência prévia de Representante + Distribuidora + Número do pedido.
 - Mensagem amigável quando o pedido já existe em STANDBY ou FINALIZADO.
 - Mantida a restrição de unicidade no banco para evitar duplicidade no resultado.
+
+
+## v6.3.8.4 — Correção CNPJ x Razão Social
+- CNPJ passa a ser a chave principal na validação de pedidos.
+- Matriz e filiais podem compartilhar a mesma Razão Social sem gerar falso conflito.
+- Autopreenchimento por Razão Social não escolhe CNPJ arbitrariamente quando existem várias unidades.
+- Mantida validação quando um CNPJ conhecido é informado com Razão Social realmente divergente.
